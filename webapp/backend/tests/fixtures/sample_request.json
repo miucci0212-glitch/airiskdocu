@@ -1,0 +1,14 @@
+{
+  "site_name": "서면 어반센트 데시앙 신축공사",
+  "vendor": "㈜한창테크",
+  "trade": "금속",
+  "period": {"start": "2026-04-28", "end": "2026-04-28"},
+  "headcount": 2,
+  "leader": "김재한",
+  "workers": ["김영열"],
+  "equipment": ["핸드그라인더", "용접기"],
+  "machinery": "해당없음",
+  "locations": ["현장출입구", "감리실 외부 출입구"],
+  "work_description": "출입구 도어 시공, 몰딩 시공",
+  "thinking_level": "balanced"
+}
