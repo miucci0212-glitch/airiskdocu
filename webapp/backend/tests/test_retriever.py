@@ -3,7 +3,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 import pandas as pd
-import chromadb
 from rag.ingest import ingest
 
 

@@ -1,7 +1,6 @@
 """ChromaDB에서 위험요인 검색 + 공종 필터링."""
 from typing import Optional
 import chromadb
-from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 from rag.ingest import COLLECTION_NAME, _get_embedding_function
 
