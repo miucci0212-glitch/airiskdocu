@@ -2,8 +2,6 @@
 import os
 import shutil
 import yaml
-from copy import copy
-from datetime import date
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import column_index_from_string
