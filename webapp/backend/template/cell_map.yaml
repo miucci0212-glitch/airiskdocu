@@ -1,0 +1,72 @@
+# 컬럼 너비 (openpyxl 단위)
+column_widths:
+  A: 5      # 번호
+  B: 14     # 작업장소
+  C: 14     # 작업내용
+  D: 9      # 헤더 label 2 / 위험요인 part1
+  E: 16     # 헤더 value 2 / 위험요인 part2
+  F: 9      # 헤더 label 3 / 안전보건추진계획 part1
+  G: 16     # 헤더 value 3 / 안전보건추진계획 part2
+  H: 7      # 비고
+
+# 행 높이 (포인트)
+row_heights:
+  header: 20    # 1-5행
+  data: 45      # 6-17행 (여러 줄 텍스트)
+  footer: 18    # 18행
+
+# Row 1: 로고 + 제목
+logo_range: "A1:B1"
+title_range: "C1:H1"
+title_text: "위험성평가서(불시,  단발성  작업)"
+logo_line1: "TAEYOUNG"
+logo_line2: "태영건설"
+
+# Row 2: 현장명 / 업체명 / 작업기간
+site_name_label_cell: "A2"
+site_name_cell: "B2:C2"
+vendor_label_cell: "D2"
+vendor_trade_cell: "E2:F2"
+period_label_cell: "G2"
+period_cell: "H2"
+
+# Row 3: 작업인원 / 건설기계
+headcount_label_cell: "A3"
+headcount_cell: "B3:C3"
+machinery_label_cell: "D3"
+machinery_cell: "E3:H3"
+
+# Row 4: 작업 책임자/근로자 / 기계기구위험물질
+leaders_label_cell: "A4"
+leader_workers_cell: "B4:C4"
+equipment_label_cell: "D4"
+equipment_cell: "E4:H4"
+
+# Row 5: 컬럼 헤더
+col_header_row: 5
+col_headers:
+  number: "A5"
+  location: "B5"
+  work: "C5"
+  hazard: "D5:E5"
+  control: "F5:G5"
+  note: "H5"
+
+# Rows 6-17: 데이터 행
+body_start_row: 6
+body_end_row: 17
+row_number_col: "A"
+location_col: "B"
+work_col: "C"
+hazard_cols: ["D", "E"]     # D:E merged
+control_cols: ["F", "G"]    # F:G merged
+note_col: "H"
+
+# Row 18: 서명란
+footer_row: 18
+footer_fields:
+  author: "A18:B18"
+  workers: "C18"
+  safety_manager: "D18:E18"
+  supervisor: "F18:G18"
+  site_manager: "H18"
