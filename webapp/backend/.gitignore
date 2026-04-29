@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/source/risk_db.xlsx
+data/risk_db/
+template/위험성평가서_template.xlsx
