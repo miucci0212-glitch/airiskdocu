@@ -18,8 +18,10 @@ def build_document_text(trade: str, work_detail: str, hazard: str, control: str)
     )
 
 
-def _make_id(trade: str, row_idx: int) -> str:
-    return hashlib.md5(f"{trade}|row{row_idx}".encode()).hexdigest()
+def _make_id(sheet_name: str, trade: str, row_idx: int) -> str:
+    return hashlib.md5(
+        f"{sheet_name}|{trade}|row{row_idx}".encode()
+    ).hexdigest()
 
 
 def _get_embedding_function(use_local: bool, api_key: str = ""):
@@ -50,11 +52,11 @@ def ingest(
     client = chromadb.PersistentClient(path=chroma_dir)
     ef = _get_embedding_function(use_local_embedding, gemini_api_key)
 
-    try:
-        if force:
+    if force:
+        try:
             client.delete_collection(COLLECTION_NAME)
-    except Exception:
-        pass
+        except ValueError:
+            pass  # collection did not exist yet
 
     collection = client.get_or_create_collection(
         COLLECTION_NAME, embedding_function=ef
@@ -74,7 +76,7 @@ def ingest(
             if not hazard or hazard == "nan":
                 continue
             doc_text = build_document_text(trade, work_detail, hazard, control)
-            doc_id = _make_id(trade, int(str(row_idx)))
+            doc_id = _make_id(sheet_name, trade, int(str(row_idx)))
             collection.upsert(
                 ids=[doc_id],
                 documents=[doc_text],

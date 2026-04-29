@@ -3,8 +3,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 import chromadb
-from unittest.mock import patch, MagicMock
-
 
 def test_build_document_text():
     from rag.ingest import build_document_text
@@ -67,3 +65,37 @@ def test_ingest_document_has_metadata(tmp_path):
     meta = result["metadatas"][0]
     assert meta["trade"] == "(01)가설전기"
     assert meta["hazard"] == "전선 피복 손상 감전"
+
+
+def test_ingest_no_collision_across_sheets(tmp_path):
+    """Two sheets with same 공종 + same row index must not collide on doc id."""
+    from rag.ingest import ingest
+    import pandas as pd
+
+    xlsx_path = str(tmp_path / "two_sheets.xlsx")
+    df_a = pd.DataFrame({
+        "공종": ["(99)공통"],
+        "세부작업": ["A 작업"],
+        "위험요인": ["A 위험"],
+        "재해형태": ["낙상"],
+        "안전대책": ["A 대책"],
+    })
+    df_b = pd.DataFrame({
+        "공종": ["(99)공통"],
+        "세부작업": ["B 작업"],
+        "위험요인": ["B 위험"],
+        "재해형태": ["낙상"],
+        "안전대책": ["B 대책"],
+    })
+    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as w:
+        df_a.to_excel(w, sheet_name="시트A", index=False)
+        df_b.to_excel(w, sheet_name="시트B", index=False)
+
+    chroma_dir = str(tmp_path / "chroma")
+    n = ingest(xlsx_path=xlsx_path, chroma_dir=chroma_dir, use_local_embedding=True)
+
+    assert n == 2
+    import chromadb
+    client = chromadb.PersistentClient(path=chroma_dir)
+    col = client.get_collection("risk_db")
+    assert col.count() == 2
