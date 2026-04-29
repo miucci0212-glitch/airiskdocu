@@ -5,7 +5,21 @@ from openpyxl import Workbook
 from openpyxl.styles import (
     Font, Alignment, Border, Side, PatternFill, GradientFill
 )
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, range_boundaries
+
+
+def _stamp_border(ws, cell_range: str, border):
+    """Apply border to every cell in a (possibly merged) range."""
+    if border is None:
+        return
+    if ":" in cell_range:
+        min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+        for row in ws.iter_rows(min_row=min_row, max_row=max_row,
+                                min_col=min_col, max_col=max_col):
+            for c in row:
+                c.border = border
+    else:
+        ws[cell_range].border = border
 
 
 _THIN = Side(style="thin")
@@ -38,7 +52,7 @@ def _merge_and_style(ws, cell_range: str, value=None, font=None,
     if alignment:
         cell.alignment = alignment
     if border:
-        cell.border = border
+        _stamp_border(ws, cell_range, border)
     return cell
 
 
@@ -127,14 +141,16 @@ def build_template(output_path: str, cell_map_path: str = "template/cell_map.yam
         ws.cell(row=excel_row, column=column_index_from_string(cm["work_col"])).border = THIN_BORDER
         ws.cell(row=excel_row, column=column_index_from_string(cm["work_col"])).alignment = center
         ws.cell(row=excel_row, column=column_index_from_string(cm["work_col"])).font = normal_font
-        ws.merge_cells(f"{hazard_start}{excel_row}:{hazard_end}{excel_row}")
-        ws[f"{hazard_start}{excel_row}"].border = THIN_BORDER
+        hazard_range = f"{hazard_start}{excel_row}:{hazard_end}{excel_row}"
+        ws.merge_cells(hazard_range)
         ws[f"{hazard_start}{excel_row}"].alignment = left_wrap
         ws[f"{hazard_start}{excel_row}"].font = normal_font
-        ws.merge_cells(f"{control_start}{excel_row}:{control_end}{excel_row}")
-        ws[f"{control_start}{excel_row}"].border = THIN_BORDER
+        _stamp_border(ws, hazard_range, THIN_BORDER)
+        control_range = f"{control_start}{excel_row}:{control_end}{excel_row}"
+        ws.merge_cells(control_range)
         ws[f"{control_start}{excel_row}"].alignment = left_wrap
         ws[f"{control_start}{excel_row}"].font = normal_font
+        _stamp_border(ws, control_range, THIN_BORDER)
         ws.cell(row=excel_row, column=column_index_from_string(cm["note_col"])).border = THIN_BORDER
         ws.cell(row=excel_row, column=column_index_from_string(cm["note_col"])).alignment = center
         ws.cell(row=excel_row, column=column_index_from_string(cm["note_col"])).font = normal_font
