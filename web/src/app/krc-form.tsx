@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
@@ -101,6 +101,27 @@ function defaultItems(): KrcItem[] {
   ];
 }
 
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function computeRiskGrade(frequency: number | null, severity: number | null): string {
+  if (frequency === null || severity === null) return "";
+  const score = frequency * severity;
+  return score >= 6 ? "상" : score >= 3 ? "중" : "하";
+}
+
+function withRiskGrades(rows: KrcRow[]): KrcRow[] {
+  return rows.map((r) => {
+    const freq = toNum(r.frequency) ?? 2;
+    const sev = toNum(r.severity) ?? 2;
+    const grade = r.risk_grade && r.risk_grade.trim() ? r.risk_grade : computeRiskGrade(freq, sev);
+    return { ...r, frequency: freq, severity: sev, risk_grade: grade };
+  });
+}
+
 function defaultRows(): KrcRow[] {
   const items = defaultItems();
   const arr: KrcRow[] = [];
@@ -145,6 +166,24 @@ export function KrcForm() {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<KrcRow[] | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!loading) return;
+    const startTime = Date.now();
+    const id = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const ratio = 1 - Math.exp(-elapsed / 12000);
+      setProgress(Math.min(92, Math.round(ratio * 100)));
+    }, 150);
+    return () => {
+      clearInterval(id);
+      setProgress(100);
+      setTimeout(() => setProgress(0), 400);
+    };
+  }, [loading]);
+
+  const showLoadingModal = loading || progress > 0;
 
   // 만족도 조사 상태 변수 추가
   const [showSurvey, setShowSurvey] = useState(false);
@@ -188,22 +227,18 @@ export function KrcForm() {
     const newRows = [...rows];
     newRows[index] = { ...newRows[index], [field]: value };
     
-    // Automatically recalculate risk grade if frequency or severity changes
     if (field === "frequency" || field === "severity") {
-      const f = newRows[index].frequency;
-      const s = newRows[index].severity;
-      if (f !== null && s !== null) {
-        const score = f * s;
-        newRows[index].risk_grade = score >= 6 ? "상" : score >= 3 ? "중" : "하";
-      } else {
-        newRows[index].risk_grade = "";
-      }
+      newRows[index].risk_grade = computeRiskGrade(
+        newRows[index].frequency,
+        newRows[index].severity,
+      );
     }
     setRows(newRows);
   }
 
   async function addRows(count: number) {
     if (!rows) return;
+    setProgress(3);
     setLoading(true);
     setError(null);
     try {
@@ -223,7 +258,7 @@ export function KrcForm() {
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
       const data = (await r.json()) as KrcAssessResponse;
-      setRows([...rows, ...data.rows]);
+      setRows([...rows, ...withRiskGrades(data.rows)]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -240,6 +275,7 @@ export function KrcForm() {
 
   async function runAssess() {
     if (filledItems.length === 0) return;
+    setProgress(3);
     setLoading(true);
     setError(null);
     setRows(null);
@@ -258,7 +294,7 @@ export function KrcForm() {
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
       const data = (await r.json()) as KrcAssessResponse;
-      setRows(data.rows);
+      setRows(withRiskGrades(data.rows));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -566,27 +602,62 @@ export function KrcForm() {
         </div>
       </div>
 
+      {/* 위험성평가 생성 진행률 모달 */}
+      {showLoadingModal && (
+        <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 animate-fade-in bg-[#000]/45">
+          <div className="bg-white/95 backdrop-blur-md rounded-[24px] border border-hairline p-8 max-w-sm w-full shadow-[0_20px_50px_rgba(0,0,0,0.25)] flex flex-col gap-6 text-center animate-scale-up">
+            <div>
+              <div className="text-[32px] mb-2">🤖</div>
+              <h3 className="text-[18px] font-extrabold tracking-[-0.5px] text-ink">
+                {rows ? "위험요인 추가 생성 중" : "위험성평가 생성 중"}
+              </h3>
+              <p className="text-[12px] text-ink-muted-48 mt-1.5 leading-relaxed">
+                농어촌공사 DB 검색 + AI 분석을<br />
+                진행하고 있습니다
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="h-3 w-full rounded-full bg-[#e8e8ed] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="text-[14px] font-semibold text-primary tabular-nums">
+                {progress}%
+              </div>
+            </div>
+
+            <p className="text-[11px] text-ink-muted-48 leading-relaxed">
+              평균 20~30초 소요됩니다. 잠시만 기다려주세요.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 만족도 설문조사 모달 (Glassmorphism & Interactive design) */}
       {showSurvey && (
-        <div className="fixed inset-0 bg-[#000]/65 backdrop-blur-[8px] z-[9999] flex items-center justify-center p-4 animate-fade-in">
-          <div 
-            className="bg-white rounded-[24px] border border-hairline p-7 max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex flex-col gap-6 text-center animate-scale-up"
+        <div className="fixed inset-0 bg-[#000]/65 backdrop-blur-[8px] z-[9999] flex items-center justify-center p-3 sm:p-4 animate-fade-in overflow-y-auto">
+          <div
+            className="bg-white rounded-[20px] sm:rounded-[24px] border border-hairline p-5 sm:p-7 max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex flex-col gap-4 sm:gap-6 text-center animate-scale-up my-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto"
+            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 모달 상단 */}
             <div>
-              <div className="text-[28px] mb-2 animate-bounce">🌟</div>
-              <h3 className="text-[19px] font-extrabold tracking-[-0.5px] text-ink">
+              <div className="text-[26px] sm:text-[28px] mb-1.5 sm:mb-2 animate-bounce">🌟</div>
+              <h3 className="text-[17px] sm:text-[19px] font-extrabold tracking-[-0.5px] text-ink">
                 서비스가 만족스러우셨나요?
               </h3>
-              <p className="text-[13px] text-ink-muted-48 mt-1.5 leading-relaxed">
+              <p className="text-[12px] sm:text-[13px] text-ink-muted-48 mt-1.5 leading-relaxed">
                 농어촌공사 위험성평가 도우미 서비스 개선을 위해<br />
                 짧은 만족도 한 마디를 부탁드립니다!
               </p>
             </div>
 
             {/* 만족도 등급 이모지 카드 (1~5) */}
-            <div className="grid grid-cols-5 gap-2.5 my-1">
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2.5 my-1">
               {[
                 { val: 1, label: "아쉬움", emoji: "😡" },
                 { val: 2, label: "그저끎", emoji: "😟" },
@@ -598,14 +669,14 @@ export function KrcForm() {
                   key={item.val}
                   type="button"
                   onClick={() => setSurveyRating(item.val)}
-                  className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-[16px] border transition-all duration-200 active:scale-95 ${
+                  className={`flex flex-col items-center justify-center py-2 px-0.5 sm:py-2.5 sm:px-1 rounded-[12px] sm:rounded-[16px] border transition-all duration-200 active:scale-95 min-w-0 ${
                     surveyRating === item.val
                       ? "border-primary bg-primary/5 text-primary scale-105 shadow-[0_4px_12px_rgba(var(--primary-rgb),0.12)]"
                       : "border-hairline hover:border-ink-muted-48 hover:bg-surface-pearl text-ink-muted-80"
                   }`}
                 >
-                  <span className="text-[24px] mb-1.5 select-none">{item.emoji}</span>
-                  <span className="text-[10px] font-semibold">{item.label}</span>
+                  <span className="text-[20px] sm:text-[24px] mb-1 sm:mb-1.5 select-none leading-none">{item.emoji}</span>
+                  <span className="text-[9px] sm:text-[10px] font-semibold leading-tight whitespace-nowrap">{item.label}</span>
                 </button>
               ))}
             </div>
@@ -617,7 +688,7 @@ export function KrcForm() {
                 value={surveyComment}
                 onChange={(e) => setSurveyComment(e.target.value)}
                 maxLength={200}
-                className="w-full rounded-[14px] border border-hairline bg-canvas p-3 text.text-sm outline-none focus:border-primary-focus focus:ring-1 focus:ring-primary-focus h-20 resize-none leading-relaxed text-[13px]"
+                className="w-full rounded-[14px] border border-hairline bg-canvas p-3 outline-none focus:border-primary-focus focus:ring-1 focus:ring-primary-focus h-20 resize-none leading-relaxed text-[13px]"
                 placeholder="도움이 된 점이나 아쉬웠던 점을 적어주시면 서비스 개선에 큰 힘이 됩니다."
               />
             </div>
@@ -628,7 +699,7 @@ export function KrcForm() {
                 type="button"
                 disabled={surveyRating === null || surveySubmitting}
                 onClick={submitSurveyAndDownload}
-                className={`w-full py-3 rounded-full text-[15px] font-semibold transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.05)] ${
+                className={`w-full py-3 rounded-full text-[14px] sm:text-[15px] font-semibold transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.05)] ${
                   surveyRating !== null
                     ? "bg-primary hover:bg-primary-focus text-on-primary hover:shadow-[0_4px_12px_rgba(var(--primary-rgb),0.2)] active:scale-[0.98]"
                     : "bg-[#e8e8ed] text-ink-muted-48 cursor-not-allowed"
@@ -909,7 +980,7 @@ function KrcPreview({
                     <Td rowSpan={2} className="text-center align-middle font-semibold text-ink bg-canvas">
                       <select
                         className="bg-transparent border-none text-[12px] text-ink font-semibold text-center outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 p-1 rounded"
-                        value={r.frequency ?? ""}
+                        value={r.frequency != null ? String(r.frequency) : ""}
                         onChange={(e) => onUpdateRow(i, "frequency", e.target.value ? Number(e.target.value) : null)}
                       >
                         <option value="">-</option>
@@ -921,7 +992,7 @@ function KrcPreview({
                     <Td rowSpan={2} className="text-center align-middle font-semibold text-ink bg-canvas">
                       <select
                         className="bg-transparent border-none text-[12px] text-ink font-semibold text-center outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 p-1 rounded"
-                        value={r.severity ?? ""}
+                        value={r.severity != null ? String(r.severity) : ""}
                         onChange={(e) => onUpdateRow(i, "severity", e.target.value ? Number(e.target.value) : null)}
                       >
                         <option value="">-</option>
