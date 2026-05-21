@@ -117,7 +117,7 @@ def build_template(output_path: str, cell_map_path: str = "template/cell_map.yam
         "work": "작업내용",
         "hazard": "위    험    요    인",
         "control": "안전보건추진계획",
-        "note": "비\n고",
+        "note": "비고",
     }
     for key, text in col_header_texts.items():
         _merge_and_style(ws, col_headers_map[key], value=text,
@@ -167,10 +167,12 @@ def build_template(output_path: str, cell_map_path: str = "template/cell_map.yam
                          font=normal_font, alignment=center, border=THIN_BORDER)
 
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
-    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToHeight = 0
     ws.page_setup.fitToWidth = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_title_rows = "5:5"
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)

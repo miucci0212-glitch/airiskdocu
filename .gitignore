@@ -14,7 +14,11 @@ __pycache__/
 
 # Backend RAG data (rebuilt locally; not in repo)
 webapp/backend/data/risk_db/
+webapp/backend/data/krc_db/
 webapp/backend/data/source/
+
+# Build/test artifacts
+webapp/backend/template/test_output.xlsx
 
 # Node / Next.js (web/ has its own .gitignore but defense-in-depth)
 node_modules/

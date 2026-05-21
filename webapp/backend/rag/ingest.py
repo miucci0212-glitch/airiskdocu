@@ -197,13 +197,11 @@ def ingest_krc(
 
     collection = client.get_or_create_collection(collection_name, embedding_function=ef)
 
-    wb = openpyxl.load_workbook(xlsx_path, data_only=True, read_only=True)
-    ws = wb.active
-
     ids: list[str] = []
     docs: list[str] = []
     metas: list[dict] = []
     seen_ids: set[str] = set()
+    total = 0
 
     def flush():
         nonlocal ids, docs, metas
@@ -212,10 +210,6 @@ def ingest_krc(
         collection.upsert(ids=ids, documents=docs, metadatas=metas)
         print(f"  [krc] flushed batch, total so far = {total}", flush=True)
         ids, docs, metas = [], [], []
-
-    current_no: int | None = None
-    current: dict | None = None
-    total = 0
 
     def emit(group: dict):
         nonlocal total
@@ -252,36 +246,51 @@ def ingest_krc(
         if len(ids) >= batch_size:
             flush()
 
-    for raw in ws.iter_rows(min_row=4, values_only=True):
-        no_cell = raw[0]
-        if no_cell is None and not any(raw):
-            continue
-        is_new = isinstance(no_cell, (int, float))
-        if is_new:
-            if current is not None:
-                emit(current)
-            current_no = int(no_cell)
-            current = {
-                "no": current_no,
-                "project": str(raw[1] or "").strip(),
-                "work": str(raw[2] or "").strip(),
-                "unit_work": str(raw[3] or "").strip(),
-                "sub_work": str(raw[4] or "").strip(),
-                "hazard": str(raw[5] or "").strip(),
-                "accident": str(raw[6] or "").strip(),
-                "controls": [str(raw[7] or "").strip()],
-                "laws": str(raw[8] or "").strip(),
-                "permit": str(raw[9] or "").strip(),
-            }
-        else:
-            if current is None:
-                continue  # leading "-" before any numbered row — skip
-            extra = str(raw[7] or "").strip()
-            if extra:
-                current["controls"].append(extra)
+    if xlsx_path.endswith(".json"):
+        import json
+        print(f"Loading preprocessed JSON: {xlsx_path}...", flush=True)
+        with open(xlsx_path, "r", encoding="utf-8") as f:
+            groups = json.load(f)
+        for group in groups:
+            emit(group)
+    else:
+        print(f"Loading Excel file: {xlsx_path}...", flush=True)
+        wb = openpyxl.load_workbook(xlsx_path, data_only=True, read_only=True)
+        ws = wb.active
 
-    if current is not None:
-        emit(current)
+        current_no: int | None = None
+        current: dict | None = None
+
+        for raw in ws.iter_rows(min_row=4, values_only=True):
+            no_cell = raw[0]
+            if no_cell is None and not any(raw):
+                continue
+            is_new = isinstance(no_cell, (int, float))
+            if is_new:
+                if current is not None:
+                    emit(current)
+                current_no = int(no_cell)
+                current = {
+                    "no": current_no,
+                    "project": str(raw[1] or "").strip(),
+                    "work": str(raw[2] or "").strip(),
+                    "unit_work": str(raw[3] or "").strip(),
+                    "sub_work": str(raw[4] or "").strip(),
+                    "hazard": str(raw[5] or "").strip(),
+                    "accident": str(raw[6] or "").strip(),
+                    "controls": [str(raw[7] or "").strip()],
+                    "laws": str(raw[8] or "").strip(),
+                    "permit": str(raw[9] or "").strip(),
+                }
+            else:
+                if current is None:
+                    continue  # leading "-" before any numbered row — skip
+                extra = str(raw[7] or "").strip()
+                if extra:
+                    current["controls"].append(extra)
+
+        if current is not None:
+            emit(current)
 
     flush()
     print(f"KRC 인덱싱 완료: {total}건 → 컬렉션 '{collection_name}'")
@@ -300,9 +309,9 @@ if __name__ == "__main__":
                 xlsx = sys.argv[i + 1]
         ingest_krc(
             xlsx_path=xlsx,
-            chroma_dir=settings.chroma_persist_dir,
+            chroma_dir=settings.krc_chroma_persist_dir,
             collection_name=settings.krc_collection_name,
-            use_local_embedding=not settings.gemini_api_key,
+            use_local_embedding=True,
             gemini_api_key=settings.gemini_api_key,
             force=force,
         )

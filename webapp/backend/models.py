@@ -97,3 +97,54 @@ class KrcSearchItemResult(BaseModel):
 
 class KrcSearchResponse(BaseModel):
     results: list[KrcSearchItemResult]
+
+
+class KrcMetadata(BaseModel):
+    krc_type: Literal["최초/정기", "수시"] = "최초/정기"
+    site_name: str = ""
+    write_date: date
+    writer: str = ""
+    period_start: date
+    period_end: date
+    approver_construction: str = ""
+    approver_safety: str = ""
+    approver_site_manager: str = ""
+    inspector_supervisor: str = ""
+
+
+class KrcRow(BaseModel):
+    detail_work: str = ""
+    work_location: str = ""
+    equipment: str = ""
+    hazard: str = ""
+    accident_type: str = ""
+    frequency: Optional[int] = None
+    severity: Optional[int] = None
+    risk_grade: str = ""
+    controls: str = ""
+    improved_risk: str = ""
+    improvement_due: str = ""
+    executor: str = ""
+    verifier: str = ""
+
+
+class KrcAssessRequest(BaseModel):
+    metadata: KrcMetadata
+    items: list[KrcSearchItem]
+
+
+class KrcAssessResponse(BaseModel):
+    rows: list[KrcRow]
+    sources: list[KrcRagHit]
+
+
+class KrcDownloadRequest(BaseModel):
+    metadata: KrcMetadata
+    rows: list[KrcRow]
+
+
+class KrcExpandRequest(BaseModel):
+    metadata: KrcMetadata
+    items: list[KrcSearchItem]
+    existing_rows: list[KrcRow] = Field(default_factory=list)
+    count: int = Field(1, ge=1, le=10)

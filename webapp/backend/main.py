@@ -1,6 +1,7 @@
 import os
 import tempfile
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -16,10 +17,16 @@ from models import (
     KrcSearchResponse,
     KrcSearchItemResult,
     KrcRagHit,
+    KrcAssessRequest,
+    KrcAssessResponse,
+    KrcDownloadRequest,
+    KrcExpandRequest,
+    KrcRow,
 )
 from rag.retriever import retrieve_for_request, retrieve_krc
-from llm.generator import generate, get_thinking_budget, MODEL_MAP
+from llm.generator import generate, generate_krc, expand_krc, compute_grade, get_thinking_budget, MODEL_MAP
 from excel.writer import fill_template
+from excel.krc_writer import fill_krc_template
 
 logging.basicConfig(level=getattr(logging, settings.log_level))
 logger = logging.getLogger(__name__)
@@ -86,19 +93,25 @@ def assess(req: AssessRequest):
 
 @app.post("/api/krc/search", response_model=KrcSearchResponse)
 def krc_search(req: KrcSearchRequest):
-    use_local = not settings.gemini_api_key
     results: list[KrcSearchItemResult] = []
-    for item in req.items:
-        hits_raw = retrieve_krc(
-            detail_work=item.detail_work,
-            work_location=item.work_location,
-            equipment=item.equipment,
-            chroma_dir=settings.chroma_persist_dir,
-            top_k=req.top_k,
-            use_local_embedding=use_local,
-            gemini_api_key=settings.gemini_api_key,
-            collection_name=settings.krc_collection_name,
-        )
+    with ThreadPoolExecutor(max_workers=min(len(req.items), 8) or 1) as executor:
+        futures = [
+            executor.submit(
+                retrieve_krc,
+                detail_work=item.detail_work,
+                work_location=item.work_location,
+                equipment=item.equipment,
+                chroma_dir=settings.krc_chroma_persist_dir,
+                top_k=req.top_k,
+                use_local_embedding=True,
+                gemini_api_key=settings.gemini_api_key,
+                collection_name=settings.krc_collection_name,
+            )
+            for item in req.items
+        ]
+        all_hits_raw = [f.result() for f in futures]
+
+    for item, hits_raw in zip(req.items, all_hits_raw):
         hits = [
             KrcRagHit(
                 no=int(h.get("no") or 0),
@@ -117,6 +130,165 @@ def krc_search(req: KrcSearchRequest):
         ]
         results.append(KrcSearchItemResult(query=item, hits=hits))
     return KrcSearchResponse(results=results)
+
+
+@app.post("/api/krc/assess", response_model=KrcAssessResponse)
+def krc_assess(req: KrcAssessRequest):
+    all_hits_per_item: list[list[dict]] = []
+    all_sources: list[KrcRagHit] = []
+    with ThreadPoolExecutor(max_workers=min(len(req.items), 8) or 1) as executor:
+        futures = [
+            executor.submit(
+                retrieve_krc,
+                detail_work=item.detail_work,
+                work_location=item.work_location,
+                equipment=item.equipment,
+                chroma_dir=settings.krc_chroma_persist_dir,
+                top_k=3,
+                use_local_embedding=True,
+                gemini_api_key=settings.gemini_api_key,
+                collection_name=settings.krc_collection_name,
+            )
+            for item in req.items
+        ]
+        all_hits_per_item = [f.result() for f in futures]
+
+    for hits in all_hits_per_item:
+        if hits:
+            top = hits[0]
+            all_sources.append(KrcRagHit(
+                no=int(top.get("no") or 0),
+                project=str(top.get("project") or ""),
+                work=str(top.get("work") or ""),
+                unit_work=str(top.get("unit_work") or ""),
+                sub_work=str(top.get("sub_work") or ""),
+                hazard=str(top.get("hazard") or ""),
+                accident=str(top.get("accident") or ""),
+                controls=str(top.get("controls") or ""),
+                laws=str(top.get("laws") or ""),
+                permit=str(top.get("permit") or ""),
+                distance=float(top.get("distance") or 0.0),
+            ))
+
+    default_executor = req.metadata.approver_safety or "작업책임자"
+    default_verifier = req.metadata.inspector_supervisor or "공사감독"
+    items_dicts = [
+        {"detail_work": it.detail_work, "work_location": it.work_location, "equipment": it.equipment}
+        for it in req.items
+    ]
+    generated, _ = generate_krc(
+        items=items_dicts,
+        rag_hits_per_item=all_hits_per_item,
+        api_key=settings.gemini_api_key,
+        default_executor=default_executor,
+        default_verifier=default_verifier,
+        model_override="gemini-2.5-flash",
+    )
+
+    rows: list[KrcRow] = []
+    for i, item in enumerate(req.items):
+        item_gen_list = generated[3 * i : 3 * i + 3]
+        for gen in item_gen_list:
+            freq = gen.get("frequency")
+            sev = gen.get("severity")
+            imp_freq = gen.get("improved_frequency")
+            imp_sev = gen.get("improved_severity")
+            grade = compute_grade(freq, sev)
+            if imp_freq is not None and imp_sev is not None:
+                imp_grade = compute_grade(imp_freq, imp_sev)
+                improved_risk = f"{imp_freq}/{imp_sev} ({imp_grade})" if imp_grade else f"{imp_freq}/{imp_sev}"
+            else:
+                improved_risk = ""
+            rows.append(KrcRow(
+                detail_work=item.detail_work,
+                work_location=item.work_location,
+                equipment=item.equipment,
+                hazard=gen.get("hazard", ""),
+                accident_type=gen.get("accident_type", ""),
+                frequency=freq,
+                severity=sev,
+                risk_grade=grade,
+                controls=gen.get("controls", ""),
+                improved_risk=improved_risk,
+                improvement_due="",
+                executor="",
+                verifier="",
+            ))
+    return KrcAssessResponse(rows=rows, sources=all_sources)
+
+
+@app.post("/api/krc/expand", response_model=KrcAssessResponse)
+def krc_expand(req: KrcExpandRequest):
+    items_dicts = [
+        {"detail_work": it.detail_work, "work_location": it.work_location, "equipment": it.equipment}
+        for it in req.items
+    ]
+    existing_hazards = [r.hazard for r in req.existing_rows if r.hazard]
+
+    generated, _ = expand_krc(
+        items=items_dicts,
+        existing_hazards=existing_hazards,
+        count=req.count,
+        api_key=settings.gemini_api_key,
+        model_override="gemini-2.5-flash",
+    )
+
+    base = req.existing_rows[-1] if req.existing_rows else None
+    base_detail = base.detail_work if base else (req.items[-1].detail_work if req.items else "")
+    base_loc = base.work_location if base else (req.items[-1].work_location if req.items else "")
+    base_equip = base.equipment if base else (req.items[-1].equipment if req.items else "")
+
+    rows: list[KrcRow] = []
+    for gen in generated:
+        freq = gen.get("frequency")
+        sev = gen.get("severity")
+        imp_freq = gen.get("improved_frequency")
+        imp_sev = gen.get("improved_severity")
+        grade = compute_grade(freq, sev)
+        if imp_freq is not None and imp_sev is not None:
+            imp_grade = compute_grade(imp_freq, imp_sev)
+            improved_risk = f"{imp_freq}/{imp_sev} ({imp_grade})" if imp_grade else f"{imp_freq}/{imp_sev}"
+        else:
+            improved_risk = ""
+        rows.append(KrcRow(
+            detail_work=base_detail,
+            work_location=base_loc,
+            equipment=base_equip,
+            hazard=gen.get("hazard", ""),
+            accident_type=gen.get("accident_type", ""),
+            frequency=freq,
+            severity=sev,
+            risk_grade=grade,
+            controls=gen.get("controls", ""),
+            improved_risk=improved_risk,
+            improvement_due="",
+            executor="",
+            verifier="",
+        ))
+    return KrcAssessResponse(rows=rows, sources=[])
+
+
+@app.post("/api/krc/download")
+def krc_download(req: KrcDownloadRequest):
+    tmp_dir = tempfile.mkdtemp()
+    site = req.metadata.site_name.replace(" ", "_")[:20] or "현장"
+    date_str = req.metadata.write_date.strftime("%Y%m%d")
+    suffix = "최초정기" if req.metadata.krc_type == "최초/정기" else "수시"
+    filename = f"위험성평가서_{suffix}_{site}_{date_str}.xlsx"
+    output_path = os.path.join(tmp_dir, filename)
+
+    template_dir = os.path.dirname(settings.template_xlsx_path)
+    fill_krc_template(
+        metadata=req.metadata,
+        rows=req.rows,
+        template_dir=template_dir,
+        output_path=output_path,
+    )
+    return FileResponse(
+        path=output_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename,
+    )
 
 
 @app.post("/api/download")

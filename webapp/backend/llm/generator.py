@@ -1,7 +1,7 @@
 """Gemini API 호출 + JSON 파싱으로 위험성평가 행을 생성한다."""
 import json
 import re
-from typing import Literal
+from typing import Literal, Optional
 
 import google.generativeai as genai
 
@@ -17,8 +17,8 @@ THINKING_BUDGET_MAP = {
 MODEL_MAP = {
     "fast": "gemini-2.5-flash",
     "balanced": "gemini-2.5-pro",
-    "thorough": "gemini-2.5-pro",
-    "max": "gemini-2.5-pro",
+    "thorough": "gemini-3.1-pro-preview",
+    "max": "gemini-3.1-pro-preview",
 }
 
 RESPONSE_SCHEMA = {
@@ -97,6 +97,248 @@ def parse_llm_response(raw: str) -> list[AssessRow]:
         return []
 
 
+def compute_grade(freq: Optional[int], sev: Optional[int]) -> str:
+    if freq is None or sev is None:
+        return ""
+    score = freq * sev
+    if score >= 6:
+        return "상"
+    if score >= 3:
+        return "중"
+    return "하"
+
+
+def _build_krc_prompt(
+    items: list[dict],
+    rag_hits_per_item: list[list[dict]],
+    default_executor: str,
+    default_verifier: str,
+) -> str:
+    sections = []
+    for i, (item, hits) in enumerate(zip(items, rag_hits_per_item)):
+        rag_text = "\n".join(
+            f"  [{j+1}] {h.get('work','')} > {h.get('unit_work','')} / {h.get('sub_work','')}\n"
+            f"      위험요인: {h.get('hazard','')}\n"
+            f"      재해형태: {h.get('accident','')}\n"
+            f"      대책: {str(h.get('controls',''))[:300]}"
+            for j, h in enumerate(hits[:5])
+        ) or "  (RAG 결과 없음)"
+        sections.append(
+            f"### 입력 항목 {i+1}\n"
+            f"- 세부작업: {item.get('detail_work','')}\n"
+            f"- 작업위치: {item.get('work_location','')}\n"
+            f"- 사용장비/설비/인원: {item.get('equipment','')}\n\n"
+            f"RAG 참고:\n{rag_text}\n"
+        )
+
+    body = "\n".join(sections)
+    return f"""당신은 농어촌공사 건설 현장 위험성평가서를 작성하는 전문가입니다.
+아래 입력 항목 {len(items)}개 각각에 대해, 해당 세부작업에서 발생할 수 있는 서로 다른 3가지 주요 위험 상황(위험요인)을 도출하여 총 {3 * len(items)}개의 위험성평가 행을 생성하세요. (입력 항목 1개당 반드시 3개의 독립적인 위험성평가 행이 생성되어야 합니다.)
+
+{body}
+
+## 출력 스펙
+- 입력 항목 수의 정확히 3배인 총 {3 * len(items)}개 객체로 구성된 JSON 배열을 반환
+- 배열의 순서는 입력 항목 1에 대한 3개 행, 이어서 입력 항목 2에 대한 3개 행 순이어야 합니다.
+- 각 객체 필드:
+  - hazard (string): 해당 작업 및 장비에서 발생 가능한 구체적인 위험요인 한 문장 (RAG 참고하여 서로 다르게 3개 도출)
+  - accident_type (string): 재해형태 단답 (예: 떨어짐, 부딪힘, 끼임, 감전, 화재, 맞음, 깔림, 베임, 무리한동작 등)
+  - frequency (int 1-3): 빈도 (1=낮음, 2=보통, 3=높음)
+  - severity (int 1-3): 강도 (1=경상, 2=중상, 3=중대)
+  - controls (string): 해당 위험요인을 예방하기 위한 구체적인 안전대책 2-4개를 줄바꿈("\\n")으로 구분
+  - improved_frequency (int 1-3): 대책 적용 후 빈도 (일반적으로 frequency 이하)
+  - improved_severity (int 1-3): 대책 적용 후 강도 (일반적으로 severity 이하)
+  - improvement_due (string): 개선예정일 ("")
+  - executor (string): 이행담당 ("")
+  - verifier (string): 확인담당 ("")
+
+반드시 유효한 JSON 배열만 반환하세요. 다른 텍스트 없이.
+"""
+
+
+def _parse_krc_response(raw: str) -> list[dict]:
+    cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
+    try:
+        data = json.loads(cleaned)
+        if not isinstance(data, list):
+            return []
+        out = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            out.append({
+                "hazard": str(item.get("hazard", "")),
+                "accident_type": str(item.get("accident_type", "")),
+                "frequency": item.get("frequency"),
+                "severity": item.get("severity"),
+                "controls": str(item.get("controls", "")),
+                "improved_frequency": item.get("improved_frequency"),
+                "improved_severity": item.get("improved_severity"),
+                "improvement_due": str(item.get("improvement_due", "")),
+                "executor": str(item.get("executor", "")),
+                "verifier": str(item.get("verifier", "")),
+            })
+        return out
+    except (json.JSONDecodeError, Exception):
+        return []
+
+
+def generate_krc(
+    items: list[dict],
+    rag_hits_per_item: list[list[dict]],
+    api_key: str,
+    default_executor: str = "작업책임자",
+    default_verifier: str = "공사감독",
+    thinking_level: str = "balanced",
+    model_override: Optional[str] = None,
+) -> tuple[list[dict], bool]:
+    """LLM으로 KRC 행 데이터를 생성. fallback_used=True면 RAG top-3로 폴백."""
+    fallback = []
+    for item, hits in zip(items, rag_hits_per_item):
+        for j in range(3):
+            h = hits[j] if len(hits) > j else (hits[0] if hits else {})
+            fallback.append({
+                "hazard": str(h.get("hazard", "")),
+                "accident_type": str(h.get("accident", "")),
+                "frequency": None,
+                "severity": None,
+                "controls": str(h.get("controls", "")),
+                "improved_frequency": None,
+                "improved_severity": None,
+                "improvement_due": "",
+                "executor": "",
+                "verifier": "",
+            })
+
+    if not api_key:
+        return fallback, True
+
+    prompt = _build_krc_prompt(items, rag_hits_per_item, default_executor, default_verifier)
+    budget = get_thinking_budget(thinking_level)
+    model_name = model_override or MODEL_MAP.get(thinking_level, "gemini-2.5-pro")
+
+    generation_config = {"response_mime_type": "application/json"}
+    if budget == 0:
+        generation_config["thinking_config"] = {"thinking_budget": 0}
+    elif budget > 0:
+        generation_config["thinking_config"] = {"thinking_budget": budget}
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
+
+    try:
+        response = model.generate_content(prompt)
+        parsed = _parse_krc_response(response.text)
+        if len(parsed) == 3 * len(items):
+            return parsed, False
+    except Exception:
+        pass
+
+    try:
+        fix_prompt = prompt + "\n\n반드시 길이 " + str(3 * len(items)) + "인 유효한 JSON 배열만 반환하세요."
+        response = model.generate_content(fix_prompt)
+        parsed = _parse_krc_response(response.text)
+        if len(parsed) == 3 * len(items):
+            return parsed, False
+    except Exception:
+        pass
+
+    return fallback, True
+
+
+def _build_krc_expand_prompt(
+    items: list[dict],
+    existing_hazards: list[str],
+    count: int,
+) -> str:
+    items_text = "\n".join(
+        f"- 세부작업: {it.get('detail_work','')} / 작업위치: {it.get('work_location','')} / "
+        f"사용장비: {it.get('equipment','')}"
+        for it in items
+    ) or "  (없음)"
+    existing_text = "\n".join(f"- {h}" for h in existing_hazards if h) or "  (없음)"
+
+    return f"""당신은 농어촌공사 건설 현장 위험성평가서를 작성하는 전문가입니다.
+아래 작업 환경에 대해, 이미 식별된 위험요인과 중복되지 않는 새로운 위험요인 {count}개를 추가로 도출하세요.
+
+## 작업 환경 (전체 항목)
+{items_text}
+
+## 이미 식별된 위험요인 (중복 금지)
+{existing_text}
+
+## 출력 스펙
+- 정확히 {count}개 객체로 구성된 JSON 배열
+- 각 객체 필드:
+  - hazard (string): 위 작업 환경에서 발생 가능한 새로운 위험요인 한 문장 (이미 식별된 항목과 시나리오가 달라야 함)
+  - accident_type (string): 재해형태 단답 (예: 떨어짐, 부딪힘, 끼임, 감전, 화재, 맞음, 깔림, 베임, 무리한동작 등)
+  - frequency (int 1-3): 빈도 (1=낮음, 2=보통, 3=높음)
+  - severity (int 1-3): 강도 (1=경상, 2=중상, 3=중대)
+  - controls (string): 구체적인 안전대책 2-4개를 줄바꿈("\\n")으로 구분
+  - improved_frequency (int 1-3): 대책 적용 후 빈도 (일반적으로 frequency 이하)
+  - improved_severity (int 1-3): 대책 적용 후 강도 (일반적으로 severity 이하)
+  - improvement_due (string): "" 빈 문자열
+  - executor (string): "" 빈 문자열
+  - verifier (string): "" 빈 문자열
+
+반드시 유효한 JSON 배열만 반환하세요. 다른 텍스트 없이.
+"""
+
+
+def expand_krc(
+    items: list[dict],
+    existing_hazards: list[str],
+    count: int,
+    api_key: str,
+    model_override: Optional[str] = None,
+) -> tuple[list[dict], bool]:
+    """기존 위험요인과 중복되지 않는 새 행 count개를 LLM으로 생성. fallback_used=True면 빈 행."""
+    empty_fallback = [
+        {
+            "hazard": "",
+            "accident_type": "",
+            "frequency": None,
+            "severity": None,
+            "controls": "",
+            "improved_frequency": None,
+            "improved_severity": None,
+            "improvement_due": "",
+            "executor": "",
+            "verifier": "",
+        }
+        for _ in range(count)
+    ]
+    if count <= 0 or not api_key:
+        return empty_fallback, True
+
+    prompt = _build_krc_expand_prompt(items, existing_hazards, count)
+    model_name = model_override or "gemini-2.5-flash"
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        generation_config={"response_mime_type": "application/json"},
+    )
+
+    try:
+        response = model.generate_content(prompt)
+        parsed = _parse_krc_response(response.text)
+        if len(parsed) >= 1:
+            return parsed[:count] + empty_fallback[len(parsed):count], False
+    except Exception:
+        pass
+
+    try:
+        fix_prompt = prompt + f"\n\n반드시 길이 {count}인 유효한 JSON 배열만 반환하세요."
+        response = model.generate_content(fix_prompt)
+        parsed = _parse_krc_response(response.text)
+        if len(parsed) >= 1:
+            return parsed[:count] + empty_fallback[len(parsed):count], False
+    except Exception:
+        pass
+
+    return empty_fallback, True
+
+
 def generate(
     work_description: str,
     equipment: list[str],
@@ -105,6 +347,7 @@ def generate(
     api_key: str,
     thinking_level: str = "balanced",
     timeout: int = 60,
+    model_override: Optional[str] = None,
 ) -> tuple[list[AssessRow], bool]:
     """
     Returns (rows, fallback_used).
@@ -112,7 +355,7 @@ def generate(
     """
     prompt = build_prompt(work_description, equipment, locations, rag_results)
     budget = get_thinking_budget(thinking_level)
-    model_name = MODEL_MAP.get(thinking_level, "gemini-2.5-pro")
+    model_name = model_override or MODEL_MAP.get(thinking_level, "gemini-2.5-pro")
 
     generation_config = {
         "response_mime_type": "application/json",

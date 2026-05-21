@@ -3,11 +3,11 @@ column_widths:
   A: 5      # 번호
   B: 14     # 작업장소
   C: 14     # 작업내용
-  D: 9      # 헤더 label 2 / 위험요인 part1
-  E: 16     # 헤더 value 2 / 위험요인 part2
-  F: 9      # 헤더 label 3 / 안전보건추진계획 part1
+  D: 20     # 헤더 label 2 / 위험요인 part1
+  E: 20     # 헤더 value 2 / 위험요인 part2
+  F: 16     # 헤더 label 3 / 안전보건추진계획 part1
   G: 16     # 헤더 value 3 / 안전보건추진계획 part2
-  H: 7      # 비고
+  H: 12     # 비고
 
 # 행 높이 (포인트)
 row_heights:

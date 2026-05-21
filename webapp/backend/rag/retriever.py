@@ -1,8 +1,39 @@
 """ChromaDB에서 위험요인 검색 + 공종 필터링."""
+import threading
 from typing import Optional
 import chromadb
 
 from rag.ingest import COLLECTION_NAME, KRC_COLLECTION_NAME, _get_embedding_function
+
+_cache_lock = threading.Lock()
+_client_cache = {}
+_ef_cache = {}
+_collection_cache = {}
+
+
+def _get_cached_collection(
+    chroma_dir: str,
+    collection_name: str,
+    use_local_embedding: bool,
+    gemini_api_key: str,
+):
+    key = (chroma_dir, collection_name, use_local_embedding, gemini_api_key)
+    with _cache_lock:
+        if key in _collection_cache:
+            return _collection_cache[key]
+
+        if chroma_dir not in _client_cache:
+            _client_cache[chroma_dir] = chromadb.PersistentClient(path=chroma_dir)
+        client = _client_cache[chroma_dir]
+
+        ef_key = (use_local_embedding, gemini_api_key)
+        if ef_key not in _ef_cache:
+            _ef_cache[ef_key] = _get_embedding_function(use_local_embedding, gemini_api_key)
+        ef = _ef_cache[ef_key]
+
+        collection = client.get_collection(collection_name, embedding_function=ef)
+        _collection_cache[key] = collection
+        return collection
 
 
 def _build_query(
@@ -27,9 +58,12 @@ def retrieve(
     gemini_api_key: str = "",
     collection_name: str = COLLECTION_NAME,
 ) -> list[dict]:
-    client = chromadb.PersistentClient(path=chroma_dir)
-    ef = _get_embedding_function(use_local_embedding, gemini_api_key)
-    collection = client.get_collection(collection_name, embedding_function=ef)
+    collection = _get_cached_collection(
+        chroma_dir=chroma_dir,
+        collection_name=collection_name,
+        use_local_embedding=use_local_embedding,
+        gemini_api_key=gemini_api_key,
+    )
 
     count = collection.count()
     if count == 0:
@@ -100,9 +134,12 @@ def retrieve_krc(
     query = " / ".join(parts) or detail_work
     equipment_kws = [s.strip() for s in equipment.split(",") if s.strip()] if equipment else None
 
-    client = chromadb.PersistentClient(path=chroma_dir)
-    ef = _get_embedding_function(use_local_embedding, gemini_api_key)
-    collection = client.get_collection(collection_name, embedding_function=ef)
+    collection = _get_cached_collection(
+        chroma_dir=chroma_dir,
+        collection_name=collection_name,
+        use_local_embedding=use_local_embedding,
+        gemini_api_key=gemini_api_key,
+    )
 
     count = collection.count()
     if count == 0:
