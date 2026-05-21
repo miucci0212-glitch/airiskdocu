@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     gemini_embedding_model: str = "text-embedding-004"
     chroma_persist_dir: str = "./data/risk_db"
     source_xlsx_path: str = "./data/source/risk_db.xlsx"
+    krc_source_xlsx_path: str = "./data/source/krc_risk_db.xlsx"
+    krc_collection_name: str = "krc_db"
     template_xlsx_path: str = "./template/위험성평가서_template.xlsx"
     cell_map_path: str = "./template/cell_map.yaml"
     llm_timeout_sec: int = 60

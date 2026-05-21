@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +21,7 @@ class AssessRequest(BaseModel):
     locations: list[str] = Field(..., description="작업장소 목록")
     work_description: str = Field(..., description="작업내용 자연어 기술")
     thinking_level: Literal["fast", "balanced", "thorough", "max"] = "balanced"
+    model_override: Optional[str] = None
 
 
 class AssessRow(BaseModel):
@@ -62,3 +63,37 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorDetail
+
+
+class KrcSearchItem(BaseModel):
+    detail_work: str = Field("", description="세부작업(단위작업)")
+    work_location: str = Field("", description="작업위치")
+    equipment: str = Field("", description="사용장비/설비/인원")
+
+
+class KrcSearchRequest(BaseModel):
+    items: list[KrcSearchItem]
+    top_k: int = Field(8, ge=1, le=30)
+
+
+class KrcRagHit(BaseModel):
+    no: int = 0
+    project: str = ""
+    work: str = ""
+    unit_work: str = ""
+    sub_work: str = ""
+    hazard: str = ""
+    accident: str = ""
+    controls: str = ""
+    laws: str = ""
+    permit: str = ""
+    distance: float = 0.0
+
+
+class KrcSearchItemResult(BaseModel):
+    query: KrcSearchItem
+    hits: list[KrcRagHit]
+
+
+class KrcSearchResponse(BaseModel):
+    results: list[KrcSearchItemResult]

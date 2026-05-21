@@ -2,7 +2,7 @@
 from typing import Optional
 import chromadb
 
-from rag.ingest import COLLECTION_NAME, _get_embedding_function
+from rag.ingest import COLLECTION_NAME, KRC_COLLECTION_NAME, _get_embedding_function
 
 
 def _build_query(
@@ -25,10 +25,11 @@ def retrieve(
     equipment_keywords: Optional[list[str]] = None,
     use_local_embedding: bool = False,
     gemini_api_key: str = "",
+    collection_name: str = COLLECTION_NAME,
 ) -> list[dict]:
     client = chromadb.PersistentClient(path=chroma_dir)
     ef = _get_embedding_function(use_local_embedding, gemini_api_key)
-    collection = client.get_collection(COLLECTION_NAME, embedding_function=ef)
+    collection = client.get_collection(collection_name, embedding_function=ef)
 
     count = collection.count()
     if count == 0:
@@ -76,3 +77,58 @@ def retrieve_for_request(
         use_local_embedding=use_local_embedding,
         gemini_api_key=gemini_api_key,
     )
+
+
+def retrieve_krc(
+    detail_work: str,
+    work_location: str,
+    equipment: str,
+    chroma_dir: str,
+    top_k: int = 8,
+    use_local_embedding: bool = True,
+    gemini_api_key: str = "",
+    collection_name: str = KRC_COLLECTION_NAME,
+) -> list[dict]:
+    """농어촌공사 KRC 컬렉션에서 항목(단위작업/작업위치/사용장비) 기반 RAG 검색."""
+    parts = []
+    if detail_work:
+        parts.append(f"단위작업: {detail_work}")
+    if work_location:
+        parts.append(f"작업위치: {work_location}")
+    if equipment:
+        parts.append(f"사용장비/설비/인원: {equipment}")
+    query = " / ".join(parts) or detail_work
+    equipment_kws = [s.strip() for s in equipment.split(",") if s.strip()] if equipment else None
+
+    client = chromadb.PersistentClient(path=chroma_dir)
+    ef = _get_embedding_function(use_local_embedding, gemini_api_key)
+    collection = client.get_collection(collection_name, embedding_function=ef)
+
+    count = collection.count()
+    if count == 0:
+        return []
+
+    raw = collection.query(
+        query_texts=[query],
+        n_results=min(top_k * 2, count),
+        include=["documents", "metadatas", "distances"],
+    )
+
+    results = []
+    for meta, doc, dist in zip(
+        raw["metadatas"][0], raw["documents"][0], raw["distances"][0]
+    ):
+        results.append({**meta, "document": doc, "distance": dist})
+
+    if equipment_kws:
+        kws = [k.lower() for k in equipment_kws]
+
+        def score(r):
+            text = (
+                r.get("hazard", "") + r.get("controls", "") + r.get("sub_work", "")
+            ).lower()
+            return sum(1 for k in kws if k in text)
+
+        results.sort(key=lambda r: (-score(r), r["distance"]))
+
+    return results[:top_k]

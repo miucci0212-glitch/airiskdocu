@@ -1,0 +1,28 @@
+.DS_Store
+
+# Secrets / env files
+webapp/backend/.env
+webapp/backend/.env.bak
+webapp/backend/.env.template
+.env.local
+.env.*.local
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Backend RAG data (rebuilt locally; not in repo)
+webapp/backend/data/risk_db/
+webapp/backend/data/source/
+
+# Node / Next.js (web/ has its own .gitignore but defense-in-depth)
+node_modules/
+.next/
+
+# Large source spreadsheets / HWP / PDF (originals; not for repo)
+*.hwp
+*.pdf
+*.xls
+*.xlsx
+!webapp/backend/template/*.xlsx
