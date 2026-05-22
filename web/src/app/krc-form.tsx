@@ -728,9 +728,9 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-4 px-5 py-3">
-      <div className="w-36 shrink-0 text-[14px] text-ink-muted-80">{label}</div>
-      <div className="flex-1 min-w-0">{children}</div>
+    <div className="flex flex-col gap-1.5 px-5 py-3 sm:flex-row sm:items-center sm:gap-4">
+      <div className="text-[13px] text-ink-muted-80 sm:w-36 sm:shrink-0 sm:text-[14px]">{label}</div>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
