@@ -963,21 +963,14 @@ function KrcPreview({
                       />
                     </Td>
                     <Td rowSpan={2} className="whitespace-pre-wrap leading-relaxed bg-canvas">
-                      <textarea
-                        rows={3}
-                        className="w-full bg-transparent border-none text-[12px] text-ink outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 p-1 rounded resize-y leading-relaxed"
-                        value={r.hazard}
-                        placeholder="위험요인 서술"
-                        onChange={(e) => onUpdateRow(i, "hazard", e.target.value)}
-                      />
+                      <div className="text-[12px] text-ink p-1 leading-relaxed">
+                        {r.hazard || <span className="text-ink-muted-48">자동 생성 중...</span>}
+                      </div>
                     </Td>
                     <Td rowSpan={2} className="text-center align-middle bg-canvas">
-                      <input
-                        className="w-full bg-transparent border-none text-[12px] text-ink text-center outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 p-1 rounded font-medium"
-                        value={r.accident_type}
-                        placeholder="재해형태"
-                        onChange={(e) => onUpdateRow(i, "accident_type", e.target.value)}
-                      />
+                      <div className="text-[12px] text-ink text-center p-1 font-medium">
+                        {r.accident_type || <span className="text-ink-muted-48">-</span>}
+                      </div>
                     </Td>
                     <Td rowSpan={2} className="text-center align-middle font-semibold text-ink bg-canvas">
                       <select
@@ -1009,13 +1002,9 @@ function KrcPreview({
                       </span>
                     </Td>
                     <Td rowSpan={2} className="whitespace-pre-wrap leading-relaxed bg-canvas">
-                      <textarea
-                        rows={3}
-                        className="w-full bg-transparent border-none text-[12px] text-ink outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 p-1 rounded resize-y leading-relaxed"
-                        value={r.controls}
-                        placeholder="안전대책 서술"
-                        onChange={(e) => onUpdateRow(i, "controls", e.target.value)}
-                      />
+                      <div className="text-[12px] text-ink p-1 leading-relaxed whitespace-pre-wrap">
+                        {r.controls || <span className="text-ink-muted-48">자동 생성 중...</span>}
+                      </div>
                     </Td>
                     <Td className="text-center font-medium text-ink bg-canvas">
                       <input

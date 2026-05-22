@@ -134,6 +134,61 @@ def heuristic_improved(freq: int, sev: int) -> tuple[int, int]:
     return max(1, freq - 1), max(1, sev - 1)
 
 
+# RAG가 3개 unique를 못 줄 때 채우는 일반 위험요인 패턴.
+# 건설현장 어디서나 적용 가능한 generic 항목.
+_GENERIC_HAZARDS: list[tuple[str, str, str]] = [
+    (
+        "작업장 정리정돈 미흡으로 통로에 자재·공구가 방치되어 작업자가 걸려 넘어짐",
+        "넘어짐",
+        "작업 전·후 정리정돈 실시\n작업통로 확보 및 자재 적치구역 분리\n정리정돈 일일 점검",
+    ),
+    (
+        "개인보호구(안전모·안전화·장갑) 미착용 상태로 작업 중 부주의로 인한 신체 부상",
+        "맞음",
+        "안전모·안전화·보호장갑 등 개인보호구 착용 철저\n작업 전 보호구 착용 상태 확인\n미착용 시 작업 중지 조치",
+    ),
+    (
+        "작업장 주변 분진·유해물질 노출로 인한 호흡기·피부 자극",
+        "질병",
+        "방진마스크·보안경·보호장갑 착용\n작업장 환기 및 분진 발생 최소화\nMSDS 비치 및 숙지",
+    ),
+    (
+        "협소한 작업 공간에서 무리한 자세로 장시간 작업 중 근골격계 손상",
+        "무리한동작",
+        "충분한 작업공간 확보\n작업 중 정기적 휴식 시간 부여\n보조기구·작업대 활용",
+    ),
+    (
+        "작업 종료 후 잔재물·공구 미처리로 인한 2차 재해 발생",
+        "맞음",
+        "작업 종료 후 잔재물 즉시 정리·처리\n위험구역 통제 및 안내표지 설치\n다음 공정 작업자 안전 확보",
+    ),
+    (
+        "비상시 대피로·소화기 등 안전시설 미숙지로 초기 대응 지연",
+        "화재",
+        "작업 전 대피로 및 소화기 위치 숙지\n비상연락망 게시\n월 1회 비상대응 훈련 실시",
+    ),
+]
+
+
+def generic_filler(index: int) -> dict:
+    """RAG 결과가 부족할 때 사용할 generic 위험요인 1개."""
+    hz, accident, controls = _GENERIC_HAZARDS[index % len(_GENERIC_HAZARDS)]
+    freq, sev = heuristic_freq_sev(accident, hz)
+    imp_freq, imp_sev = heuristic_improved(freq, sev)
+    return {
+        "hazard": hz,
+        "accident_type": accident,
+        "frequency": freq,
+        "severity": sev,
+        "controls": controls,
+        "improved_frequency": imp_freq,
+        "improved_severity": imp_sev,
+        "improvement_due": "",
+        "executor": "",
+        "verifier": "",
+    }
+
+
 def _build_krc_prompt(
     items: list[dict],
     rag_hits_per_item: list[list[dict]],
@@ -220,6 +275,7 @@ def generate_krc(
 ) -> tuple[list[dict], bool]:
     """LLM으로 KRC 행 데이터를 생성. fallback_used=True면 RAG top-3로 폴백."""
     fallback = []
+    generic_counter = 0
     for item, hits in zip(items, rag_hits_per_item):
         # hazard 텍스트 기준으로 중복 제거 — ChromaDB가 거의 동일한 문서를 여러 번 돌려줘도
         # 같은 항목에 동일 위험요인이 3개 들어가지 않게 한다.
@@ -233,27 +289,30 @@ def generate_krc(
             unique_hits.append(h)
             if len(unique_hits) >= 3:
                 break
-        while len(unique_hits) < 3:
-            unique_hits.append({})
 
         for j in range(3):
-            h = unique_hits[j]
-            hazard = str(h.get("hazard", ""))
-            accident = str(h.get("accident", ""))
-            freq, sev = heuristic_freq_sev(accident, hazard)
-            imp_freq, imp_sev = heuristic_improved(freq, sev)
-            fallback.append({
-                "hazard": hazard,
-                "accident_type": accident,
-                "frequency": freq,
-                "severity": sev,
-                "controls": str(h.get("controls", "")),
-                "improved_frequency": imp_freq,
-                "improved_severity": imp_sev,
-                "improvement_due": "",
-                "executor": "",
-                "verifier": "",
-            })
+            if j < len(unique_hits):
+                h = unique_hits[j]
+                hazard = str(h.get("hazard", ""))
+                accident = str(h.get("accident", ""))
+                freq, sev = heuristic_freq_sev(accident, hazard)
+                imp_freq, imp_sev = heuristic_improved(freq, sev)
+                fallback.append({
+                    "hazard": hazard,
+                    "accident_type": accident,
+                    "frequency": freq,
+                    "severity": sev,
+                    "controls": str(h.get("controls", "")),
+                    "improved_frequency": imp_freq,
+                    "improved_severity": imp_sev,
+                    "improvement_due": "",
+                    "executor": "",
+                    "verifier": "",
+                })
+            else:
+                # RAG가 unique를 다 못 채우면 generic 위험요인으로 보충
+                fallback.append(generic_filler(generic_counter))
+                generic_counter += 1
 
     if not api_key:
         return fallback, True
@@ -370,13 +429,16 @@ def expand_krc(
             })
             if len(picked) >= count:
                 break
-        while len(picked) < count:
-            picked.append({
-                "hazard": "", "accident_type": "",
-                "frequency": None, "severity": None, "controls": "",
-                "improved_frequency": None, "improved_severity": None,
-                "improvement_due": "", "executor": "", "verifier": "",
-            })
+        # 부족한 만큼 generic 위험요인으로 보충 (기존/현재 picked의 hazard 텍스트 회피)
+        used = existing_set | {p["hazard"] for p in picked}
+        gi = 0
+        while len(picked) < count and gi < len(_GENERIC_HAZARDS) * 2:
+            cand = generic_filler(gi)
+            gi += 1
+            if cand["hazard"] in used:
+                continue
+            used.add(cand["hazard"])
+            picked.append(cand)
         return picked
 
     if count <= 0 or not api_key:
