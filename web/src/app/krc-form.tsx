@@ -115,9 +115,11 @@ function computeRiskGrade(frequency: number | null, severity: number | null): st
 
 function withRiskGrades(rows: KrcRow[]): KrcRow[] {
   return rows.map((r) => {
-    const freq = toNum(r.frequency) ?? 2;
-    const sev = toNum(r.severity) ?? 2;
-    const grade = r.risk_grade && r.risk_grade.trim() ? r.risk_grade : computeRiskGrade(freq, sev);
+    const freq = toNum(r.frequency);
+    const sev = toNum(r.severity);
+    const grade = r.risk_grade && r.risk_grade.trim()
+      ? r.risk_grade
+      : computeRiskGrade(freq, sev);
     return { ...r, frequency: freq, severity: sev, risk_grade: grade };
   });
 }

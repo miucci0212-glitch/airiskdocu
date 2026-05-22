@@ -1,11 +1,14 @@
 """Gemini API 호출 + JSON 파싱으로 위험성평가 행을 생성한다."""
 import json
+import logging
 import re
 from typing import Literal, Optional
 
 import google.generativeai as genai
 
 from models import AssessRow
+
+logger = logging.getLogger(__name__)
 
 THINKING_BUDGET_MAP = {
     "fast": 0,
@@ -108,6 +111,29 @@ def compute_grade(freq: Optional[int], sev: Optional[int]) -> str:
     return "하"
 
 
+# 재해형태별 (빈도, 강도) 휴리스틱 — LLM 폴백에서 등급이 모두 비지 않게 하기 위함
+_HIGH_RISK = ("떨어짐", "추락", "감전", "화재", "폭발", "붕괴", "무너짐", "깔림", "익사", "질식", "압사")
+_MED_RISK = ("끼임", "협착", "부딪힘", "충돌", "맞음", "낙하", "화상", "유해물질", "질병")
+_LOW_RISK = ("베임", "절단", "찰과", "미끄러짐", "넘어짐", "전도", "무리한동작", "근골격계")
+
+
+def heuristic_freq_sev(accident_type: str, hazard: str = "") -> tuple[int, int]:
+    """LLM 누락 시 재해형태/위험요인 텍스트로 (빈도, 강도)를 추정한다."""
+    text = f"{accident_type} {hazard}"
+    if any(k in text for k in _HIGH_RISK):
+        return 2, 3  # 상 (score 6)
+    if any(k in text for k in _LOW_RISK):
+        return 1, 2  # 하 (score 2)
+    if any(k in text for k in _MED_RISK):
+        return 2, 2  # 중 (score 4)
+    return 2, 2  # 알 수 없으면 중
+
+
+def heuristic_improved(freq: int, sev: int) -> tuple[int, int]:
+    """대책 적용 후 빈도/강도 — 보통 한 단계씩 낮춘다."""
+    return max(1, freq - 1), max(1, sev - 1)
+
+
 def _build_krc_prompt(
     items: list[dict],
     rag_hits_per_item: list[list[dict]],
@@ -197,14 +223,18 @@ def generate_krc(
     for item, hits in zip(items, rag_hits_per_item):
         for j in range(3):
             h = hits[j] if len(hits) > j else (hits[0] if hits else {})
+            hazard = str(h.get("hazard", ""))
+            accident = str(h.get("accident", ""))
+            freq, sev = heuristic_freq_sev(accident, hazard)
+            imp_freq, imp_sev = heuristic_improved(freq, sev)
             fallback.append({
-                "hazard": str(h.get("hazard", "")),
-                "accident_type": str(h.get("accident", "")),
-                "frequency": None,
-                "severity": None,
+                "hazard": hazard,
+                "accident_type": accident,
+                "frequency": freq,
+                "severity": sev,
                 "controls": str(h.get("controls", "")),
-                "improved_frequency": None,
-                "improved_severity": None,
+                "improved_frequency": imp_freq,
+                "improved_severity": imp_sev,
                 "improvement_due": "",
                 "executor": "",
                 "verifier": "",
@@ -231,8 +261,9 @@ def generate_krc(
         parsed = _parse_krc_response(response.text)
         if len(parsed) == 3 * len(items):
             return parsed, False
-    except Exception:
-        pass
+        logger.warning("krc_llm_attempt1: parsed_len=%d expected=%d preview=%r", len(parsed), 3 * len(items), response.text[:200])
+    except Exception as e:
+        logger.warning("krc_llm_attempt1_exc: %s: %s", type(e).__name__, e)
 
     try:
         fix_prompt = prompt + "\n\n반드시 길이 " + str(3 * len(items)) + "인 유효한 JSON 배열만 반환하세요."
@@ -240,9 +271,11 @@ def generate_krc(
         parsed = _parse_krc_response(response.text)
         if len(parsed) == 3 * len(items):
             return parsed, False
-    except Exception:
-        pass
+        logger.warning("krc_llm_attempt2: parsed_len=%d expected=%d preview=%r", len(parsed), 3 * len(items), response.text[:200])
+    except Exception as e:
+        logger.warning("krc_llm_attempt2_exc: %s: %s", type(e).__name__, e)
 
+    logger.warning("krc_llm_fallback: returning RAG-only fallback for %d items", len(items))
     return fallback, True
 
 
