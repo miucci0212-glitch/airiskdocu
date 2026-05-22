@@ -339,25 +339,48 @@ def expand_krc(
     count: int,
     api_key: str,
     model_override: Optional[str] = None,
+    rag_hits: Optional[list[dict]] = None,
 ) -> tuple[list[dict], bool]:
-    """기존 위험요인과 중복되지 않는 새 행 count개를 LLM으로 생성. fallback_used=True면 빈 행."""
-    empty_fallback = [
-        {
-            "hazard": "",
-            "accident_type": "",
-            "frequency": None,
-            "severity": None,
-            "controls": "",
-            "improved_frequency": None,
-            "improved_severity": None,
-            "improvement_due": "",
-            "executor": "",
-            "verifier": "",
-        }
-        for _ in range(count)
-    ]
+    """기존 위험요인과 중복되지 않는 새 행 count개를 LLM으로 생성.
+    fallback_used=True면 RAG hits에서 기존과 겹치지 않는 항목으로 채우거나(없으면) 빈 행."""
+
+    def build_rag_fallback() -> list[dict]:
+        existing_set = {h.strip() for h in existing_hazards if h and h.strip()}
+        picked: list[dict] = []
+        seen: set[str] = set()
+        for h in rag_hits or []:
+            hz = str(h.get("hazard", "")).strip()
+            if not hz or hz in existing_set or hz in seen:
+                continue
+            seen.add(hz)
+            accident = str(h.get("accident", ""))
+            freq, sev = heuristic_freq_sev(accident, hz)
+            imp_freq, imp_sev = heuristic_improved(freq, sev)
+            picked.append({
+                "hazard": hz,
+                "accident_type": accident,
+                "frequency": freq,
+                "severity": sev,
+                "controls": str(h.get("controls", "")),
+                "improved_frequency": imp_freq,
+                "improved_severity": imp_sev,
+                "improvement_due": "",
+                "executor": "",
+                "verifier": "",
+            })
+            if len(picked) >= count:
+                break
+        while len(picked) < count:
+            picked.append({
+                "hazard": "", "accident_type": "",
+                "frequency": None, "severity": None, "controls": "",
+                "improved_frequency": None, "improved_severity": None,
+                "improvement_due": "", "executor": "", "verifier": "",
+            })
+        return picked
+
     if count <= 0 or not api_key:
-        return empty_fallback, True
+        return build_rag_fallback(), True
 
     prompt = _build_krc_expand_prompt(items, existing_hazards, count)
     model_name = model_override or "gemini-2.5-flash"
@@ -371,20 +394,23 @@ def expand_krc(
         response = model.generate_content(prompt)
         parsed = _parse_krc_response(response.text)
         if len(parsed) >= 1:
-            return parsed[:count] + empty_fallback[len(parsed):count], False
-    except Exception:
-        pass
+            rag_pad = build_rag_fallback()
+            return parsed[:count] + rag_pad[len(parsed):count], False
+    except Exception as e:
+        logger.warning("krc_expand_attempt1_exc: %s: %s", type(e).__name__, e)
 
     try:
         fix_prompt = prompt + f"\n\n반드시 길이 {count}인 유효한 JSON 배열만 반환하세요."
         response = model.generate_content(fix_prompt)
         parsed = _parse_krc_response(response.text)
         if len(parsed) >= 1:
-            return parsed[:count] + empty_fallback[len(parsed):count], False
-    except Exception:
-        pass
+            rag_pad = build_rag_fallback()
+            return parsed[:count] + rag_pad[len(parsed):count], False
+    except Exception as e:
+        logger.warning("krc_expand_attempt2_exc: %s: %s", type(e).__name__, e)
 
-    return empty_fallback, True
+    logger.warning("krc_expand_fallback: RAG fallback for %d items", count)
+    return build_rag_fallback(), True
 
 
 def generate(

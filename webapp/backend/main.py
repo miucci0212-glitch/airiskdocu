@@ -225,12 +225,32 @@ def krc_expand(req: KrcExpandRequest):
     ]
     existing_hazards = [r.hazard for r in req.existing_rows if r.hazard]
 
+    aggregated_hits: list[dict] = []
+    with ThreadPoolExecutor(max_workers=min(len(req.items), 8) or 1) as executor:
+        futures = [
+            executor.submit(
+                retrieve_krc,
+                detail_work=item.detail_work,
+                work_location=item.work_location,
+                equipment=item.equipment,
+                chroma_dir=settings.krc_chroma_persist_dir,
+                top_k=15,
+                use_local_embedding=True,
+                gemini_api_key=settings.gemini_api_key,
+                collection_name=settings.krc_collection_name,
+            )
+            for item in req.items
+        ]
+        for f in futures:
+            aggregated_hits.extend(f.result())
+
     generated, _ = expand_krc(
         items=items_dicts,
         existing_hazards=existing_hazards,
         count=req.count,
         api_key=settings.gemini_api_key,
         model_override="gemini-2.5-flash",
+        rag_hits=aggregated_hits,
     )
 
     base = req.existing_rows[-1] if req.existing_rows else None
