@@ -415,8 +415,8 @@ export function KrcForm() {
           <Text type="date" value={periodStart} onChange={setPeriodStart} />
         </Row>
         <Row label="관리기간 종료일">
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[140px]">
               <Text type="date" value={periodEnd} onChange={setPeriodEnd} />
             </div>
             <PresetChip
@@ -730,7 +730,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="flex items-center gap-4 px-5 py-3">
       <div className="w-36 shrink-0 text-[14px] text-ink-muted-80">{label}</div>
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
 }
@@ -881,7 +881,7 @@ function KrcPreview({
           <table className="w-full border-collapse text-[12px]">
             <thead className="bg-surface-pearl text-ink-muted-80 border-b border-hairline">
               <tr className="align-middle">
-                <Th rowSpan={2} className="w-[11%]">
+                <Th rowSpan={2} className="w-[15%]">
                   세부작업
                   <br />
                   <span className="text-ink-muted-48">(작업위치)</span>
@@ -891,7 +891,7 @@ function KrcPreview({
                   <br />
                   /설비/인원
                 </Th>
-                <Th rowSpan={2} className="w-[20%]">
+                <Th rowSpan={2} className="w-[18%]">
                   위험요인
                 </Th>
                 <Th rowSpan={2} className="w-[7%]">
@@ -905,7 +905,7 @@ function KrcPreview({
                   <br />
                   등급
                 </Th>
-                <Th rowSpan={2} className="w-[22%]">
+                <Th rowSpan={2} className="w-[19%]">
                   예방대책
                 </Th>
                 <Th rowSpan={2} className="w-[9%]">
