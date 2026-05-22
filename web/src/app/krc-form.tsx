@@ -415,20 +415,20 @@ export function KrcForm() {
           <Text type="date" value={periodStart} onChange={setPeriodStart} />
         </Row>
         <Row label="관리기간 종료일">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex-1 min-w-[140px]">
-              <Text type="date" value={periodEnd} onChange={setPeriodEnd} />
+          <div className="flex flex-col gap-2">
+            <Text type="date" value={periodEnd} onChange={setPeriodEnd} />
+            <div className="flex gap-2">
+              <PresetChip
+                label="7일"
+                onClick={() => setPeriodEnd(addDays(periodStart, 6))}
+                disabled={!periodStart}
+              />
+              <PresetChip
+                label="30일"
+                onClick={() => setPeriodEnd(addDays(periodStart, 29))}
+                disabled={!periodStart}
+              />
             </div>
-            <PresetChip
-              label="7일"
-              onClick={() => setPeriodEnd(addDays(periodStart, 6))}
-              disabled={!periodStart}
-            />
-            <PresetChip
-              label="30일"
-              onClick={() => setPeriodEnd(addDays(periodStart, 29))}
-              disabled={!periodStart}
-            />
           </div>
         </Row>
       </Card>
