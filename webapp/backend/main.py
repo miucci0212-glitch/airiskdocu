@@ -144,7 +144,7 @@ def krc_assess(req: KrcAssessRequest):
                 work_location=item.work_location,
                 equipment=item.equipment,
                 chroma_dir=settings.krc_chroma_persist_dir,
-                top_k=3,
+                top_k=10,
                 use_local_embedding=True,
                 gemini_api_key=settings.gemini_api_key,
                 collection_name=settings.krc_collection_name,

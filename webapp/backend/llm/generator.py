@@ -221,8 +221,23 @@ def generate_krc(
     """LLM으로 KRC 행 데이터를 생성. fallback_used=True면 RAG top-3로 폴백."""
     fallback = []
     for item, hits in zip(items, rag_hits_per_item):
+        # hazard 텍스트 기준으로 중복 제거 — ChromaDB가 거의 동일한 문서를 여러 번 돌려줘도
+        # 같은 항목에 동일 위험요인이 3개 들어가지 않게 한다.
+        seen_hazards: set[str] = set()
+        unique_hits: list[dict] = []
+        for h in hits:
+            hz = str(h.get("hazard", "")).strip()
+            if hz and hz in seen_hazards:
+                continue
+            seen_hazards.add(hz)
+            unique_hits.append(h)
+            if len(unique_hits) >= 3:
+                break
+        while len(unique_hits) < 3:
+            unique_hits.append({})
+
         for j in range(3):
-            h = hits[j] if len(hits) > j else (hits[0] if hits else {})
+            h = unique_hits[j]
             hazard = str(h.get("hazard", ""))
             accident = str(h.get("accident", ""))
             freq, sev = heuristic_freq_sev(accident, hazard)
