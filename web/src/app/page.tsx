@@ -22,9 +22,10 @@ type AssessResponse = {
 };
 
 const MODELS = [
-  { value: "", label: "자동 (사고강도에 따라 결정)" },
-  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview (최신·고성능)" },
-  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash-Lite Preview (최신·경량)" },
+  { value: "", label: "자동 (AI 추론 수준에 따라 결정)" },
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (최신·빠름)" },
+  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview (고성능)" },
+  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash-Lite Preview (경량)" },
   { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (고성능)" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (빠름)" },
   { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
@@ -290,62 +291,95 @@ export default function Home() {
             </Row>
           </Card>
 
-          <Card title="AI 설정">
-            <Row label="생성 모드">
-              <div role="radiogroup" aria-label="생성 모드" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={form.generation_mode === "db"}
-                  onClick={() => update("generation_mode", "db")}
-                  disabled={loading}
-                  title="태영건설 DB 어휘·표현을 그대로 사용"
-                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
-                    form.generation_mode === "db"
-                      ? "bg-primary text-white"
-                      : "text-ink-muted-80 hover:bg-surface-pearl"
-                  }`}
-                >
-                  DB 중심
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={form.generation_mode === "hybrid"}
-                  onClick={() => update("generation_mode", "hybrid")}
-                  disabled={loading}
-                  title="DB를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장"
-                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
-                    form.generation_mode === "hybrid"
-                      ? "bg-primary text-white"
-                      : "text-ink-muted-80 hover:bg-surface-pearl"
-                  }`}
-                >
-                  DB+AI 혼합
-                </button>
+          <div className="rounded-[11px] border border-hairline bg-surface-pearl px-4 py-3 flex flex-col gap-3">
+            <div className="text-[13px] text-ink-muted-80 leading-relaxed">
+              위험요인, 안전보건추진계획을 포함한 모든 항목이 태영건설 DB와 AI 분석을 통해 자동으로 작성됩니다.
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide shrink-0">생성 모드</span>
+                <div role="radiogroup" aria-label="생성 모드" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={form.generation_mode === "db"}
+                    onClick={() => update("generation_mode", "db")}
+                    disabled={loading}
+                    title="태영건설 DB 어휘·표현을 그대로 사용"
+                    className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                      form.generation_mode === "db"
+                        ? "bg-primary text-white"
+                        : "text-ink-muted-80 hover:bg-surface-pearl"
+                    }`}
+                  >
+                    DB 중심
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={form.generation_mode === "hybrid"}
+                    onClick={() => update("generation_mode", "hybrid")}
+                    disabled={loading}
+                    title="DB를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장"
+                    className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                      form.generation_mode === "hybrid"
+                        ? "bg-primary text-white"
+                        : "text-ink-muted-80 hover:bg-surface-pearl"
+                    }`}
+                  >
+                    DB+AI 혼합
+                  </button>
+                </div>
               </div>
-            </Row>
-            <Row label="AI 추론 수준">
-              <SegmentedControl
-                options={THINKING_LEVELS}
-                value={form.thinking_level}
-                onChange={(v) => update("thinking_level", v)}
-              />
-            </Row>
-            <Row label="AI 모델">
-              <select
-                className="w-full rounded-[11px] border border-hairline bg-canvas px-3 py-2 text-[15px] outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25"
-                value={form.model_override}
-                onChange={(e) => update("model_override", e.target.value)}
-              >
-                {MODELS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </Row>
-          </Card>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide shrink-0">AI 추론 수준</span>
+                <div role="radiogroup" aria-label="AI 추론 수준" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  {THINKING_LEVELS.map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.thinking_level === level}
+                      onClick={() => update("thinking_level", level)}
+                      disabled={loading}
+                      title={
+                        level === "fast"
+                          ? "Gemini 2.5 Flash — 빠르게 즉답"
+                          : level === "balanced"
+                          ? "Gemini 2.5 Pro — 속도/품질 균형 (기본값)"
+                          : level === "thorough"
+                          ? "Gemini 3.1 Pro Preview — 8K 토큰까지 추론, 꼼꼼히"
+                          : "Gemini 3.1 Pro Preview — 24K 토큰까지 추론, 가장 깊게"
+                      }
+                      className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                        form.thinking_level === level
+                          ? "bg-primary text-white"
+                          : "text-ink-muted-80 hover:bg-surface-pearl"
+                      }`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 min-w-0 max-w-full">
+                <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide shrink-0">AI 모델</span>
+                <select
+                  aria-label="AI 모델"
+                  value={form.model_override}
+                  onChange={(e) => update("model_override", e.target.value)}
+                  disabled={loading}
+                  className="min-w-0 max-w-full rounded-full border border-hairline bg-white px-3 py-1 text-[12px] font-semibold text-ink outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25"
+                >
+                  {MODELS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
           {error && (
             <div className="rounded-[11px] border border-hairline bg-[#fef2f2] px-4 py-3 text-[14px] text-ink-muted-80">

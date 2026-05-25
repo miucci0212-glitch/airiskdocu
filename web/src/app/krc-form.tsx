@@ -51,6 +51,16 @@ type GenerationMode = "db" | "hybrid";
 const THINKING_LEVELS = ["fast", "balanced", "thorough", "max"] as const;
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
+const MODELS = [
+  { value: "", label: "자동 (AI 추론 수준에 따라 결정)" },
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (최신·빠름)" },
+  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview (고성능)" },
+  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash-Lite Preview (경량)" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (고성능)" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (빠름)" },
+  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+];
+
 const MAX_ENTRIES = 3;
 
 const DEFAULTS = {
@@ -170,6 +180,7 @@ export function KrcForm() {
   const [items, setItems] = useState<KrcItem[]>(defaultItems);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("hybrid");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("balanced");
+  const [modelOverride, setModelOverride] = useState<string>("");
 
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -302,6 +313,7 @@ export function KrcForm() {
           })),
           generation_mode: generationMode,
           thinking_level: thinkingLevel,
+          model_override: modelOverride || null,
         }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
@@ -563,8 +575,8 @@ export function KrcForm() {
           위험요인, 재해유형, 안전대책 및 위험성 등급을 포함한 모든 항목이 농어촌공사 DB와 AI 분석을 통해 자동으로 작성됩니다.
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide">생성 모드</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide shrink-0">생성 모드</span>
             <div role="radiogroup" aria-label="생성 모드" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
               <button
                 type="button"
@@ -598,8 +610,8 @@ export function KrcForm() {
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide">AI 추론 수준</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide shrink-0">AI 추론 수준</span>
             <div role="radiogroup" aria-label="AI 추론 수준" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
               {THINKING_LEVELS.map((level) => (
                 <button
@@ -628,6 +640,22 @@ export function KrcForm() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="flex items-center gap-2 min-w-0 max-w-full">
+            <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide shrink-0">AI 모델</span>
+            <select
+              aria-label="AI 모델"
+              value={modelOverride}
+              onChange={(e) => setModelOverride(e.target.value)}
+              disabled={loading}
+              className="min-w-0 max-w-full rounded-full border border-hairline bg-white px-3 py-1 text-[12px] font-semibold text-ink outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25"
+            >
+              {MODELS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
