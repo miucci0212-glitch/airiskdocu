@@ -22,6 +22,10 @@ class AssessRequest(BaseModel):
     work_description: str = Field(..., description="작업내용 자연어 기술")
     thinking_level: Literal["fast", "balanced", "thorough", "max"] = "balanced"
     model_override: Optional[str] = None
+    generation_mode: Literal["db", "hybrid"] = Field(
+        "hybrid",
+        description="db=태영건설 DB 어휘에 충실, hybrid=DB를 시드로 LLM이 일반 건설지식으로 확장",
+    )
 
 
 class AssessRow(BaseModel):

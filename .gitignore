@@ -30,3 +30,4 @@ node_modules/
 *.xls
 *.xlsx
 !webapp/backend/template/*.xlsx
+.gstack/

@@ -49,12 +49,36 @@ def build_prompt(
     equipment: list[str],
     locations: list[str],
     rag_results: list[dict],
+    generation_mode: str = "hybrid",
 ) -> str:
     rag_text = "\n".join(
         f"[{i+1}] 공종:{r['trade']} | 세부작업:{r['work_detail']} | "
         f"위험요인:{r['hazard']} | 대책:{r['control']}"
         for i, r in enumerate(rag_results)
     )
+
+    if generation_mode == "hybrid":
+        guidance = (
+            "## 도출 방침 (DB+LLM 혼합)\n"
+            "1. RAG 검색 결과는 태영건설 위험성평가 DB의 시드(seed)입니다. 그대로 베끼지 말고 작업·장비·환경에 맞게 재구성하세요.\n"
+            "2. RAG에 없는 위험요인이라도 해당 작업에서 실제 발생 가능하다면 일반 건설 안전 지식을 활용해 적극 포함하세요.\n"
+            "3. 가능한 한 서로 다른 재해형태(추락·감전·끼임·화재·맞음·깔림·붕괴·베임·근골격계·질병·유해물질 노출 등)를 다양화하세요.\n"
+            "4. 입력된 장비(예: 그라인더, 용접기)에 맞는 위험요인을 우선 포함하세요.\n"
+            "5. 각 항목은 실제로 발생 가능한 구체적 위험 상황을 서술하세요.\n"
+            "6. 안전보건추진계획은 \"- \" 형식으로 2~4개 항목을 작성하세요.\n"
+            "7. 작업장소와 작업내용은 입력값을 사용하세요.\n"
+        )
+    else:  # db
+        guidance = (
+            "## 도출 방침 (DB 중심)\n"
+            "1. RAG 검색 결과에 제시된 태영건설 DB 위험요인을 그대로 활용하거나 가깝게 재서술하세요.\n"
+            "2. RAG에서 다루지 않은 주제는 가급적 추가하지 말고, DB 어휘·표현 방식을 유지하세요.\n"
+            "3. 입력된 장비(예: 그라인더, 용접기)에 맞는 위험요인을 우선 포함하세요.\n"
+            "4. 각 항목은 실제로 발생 가능한 구체적 위험 상황을 서술하세요.\n"
+            "5. 안전보건추진계획은 \"- \" 형식으로 2~4개 항목을 작성하세요.\n"
+            "6. 작업장소와 작업내용은 입력값을 사용하세요.\n"
+        )
+
     return f"""당신은 건설 현장 위험성평가서를 작성하는 전문가입니다.
 
 ## 사용자 입력
@@ -65,14 +89,7 @@ def build_prompt(
 ## 참고 위험성평가 DB (RAG 검색 결과)
 {rag_text}
 
-## 지시사항
-1. 위 RAG 검색 결과를 기반으로 해당 작업의 위험요인과 안전보건추진계획을 작성하세요.
-2. 입력된 장비(예: 그라인더, 용접기)에 맞는 위험요인을 우선 포함하세요.
-3. 공통사항(중량물, 화재, 비산먼지 등)도 적절히 포함하세요.
-4. 각 항목은 실제로 발생 가능한 구체적 위험 상황을 서술하세요.
-5. 안전보건추진계획은 "- " 형식으로 2~4개 항목을 작성하세요.
-6. 작업장소와 작업내용은 입력값을 사용하세요.
-
+{guidance}
 ## 출력 형식
 반드시 JSON 배열로만 응답하세요. 각 항목:
 {{"location": "작업장소", "work": "작업내용", "hazard": "위험요인 상세 서술", "control": "- 대책1\\n- 대책2", "note": ""}}
@@ -558,12 +575,17 @@ def generate(
     thinking_level: str = "balanced",
     timeout: int = 60,
     model_override: Optional[str] = None,
+    generation_mode: Literal["db", "hybrid"] = "hybrid",
 ) -> tuple[list[AssessRow], bool]:
     """
     Returns (rows, fallback_used).
     fallback_used=True 이면 LLM 실패로 RAG 원문을 사용.
+
+    generation_mode:
+      - "db": RAG hits를 거의 그대로 재서술 (DB 어휘 유지)
+      - "hybrid": RAG를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장
     """
-    prompt = build_prompt(work_description, equipment, locations, rag_results)
+    prompt = build_prompt(work_description, equipment, locations, rag_results, generation_mode=generation_mode)
     budget = get_thinking_budget(thinking_level)
     model_name = model_override or MODEL_MAP.get(thinking_level, "gemini-2.5-pro")
 

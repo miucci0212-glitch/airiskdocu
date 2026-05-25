@@ -75,6 +75,7 @@ def assess(req: AssessRequest):
         thinking_level=req.thinking_level,
         timeout=settings.llm_timeout_sec,
         model_override=req.model_override,
+        generation_mode=req.generation_mode,
     )
 
     sources = [

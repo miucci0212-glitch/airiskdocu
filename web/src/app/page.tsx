@@ -36,6 +36,8 @@ type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 const COMPANIES = ["태영건설", "농어촌공사"] as const;
 type Company = (typeof COMPANIES)[number];
 
+type GenerationMode = "db" | "hybrid";
+
 const DEFAULT_REQUEST = {
   site_name: "서면 어반센트 데시앙 신축공사",
   vendor: "㈜한창테크",
@@ -53,6 +55,7 @@ const DEFAULT_REQUEST = {
   work_description: "출입구 도어 시공, 몰딩 시공",
   thinking_level: "balanced" as ThinkingLevel,
   model_override: "",
+  generation_mode: "hybrid" as GenerationMode,
 };
 
 function toRequest(form: typeof DEFAULT_REQUEST) {
@@ -70,6 +73,7 @@ function toRequest(form: typeof DEFAULT_REQUEST) {
     work_description: form.work_description,
     thinking_level: form.thinking_level,
     model_override: form.model_override || null,
+    generation_mode: form.generation_mode,
   };
 }
 
@@ -159,7 +163,6 @@ export default function Home() {
         <div className="mx-auto max-w-3xl px-4 pt-5 pb-4 sm:px-6">
           <div className="flex items-baseline justify-between px-2 sm:px-0">
             <h1 className="text-[22px] font-semibold tracking-[-0.3px]">AI 위험성평가 도우미</h1>
-            <span className="text-[13px] text-ink-muted-48">불시 · 단발성 작업</span>
           </div>
           <div className="mt-3 flex items-center gap-3 px-2 sm:px-0">
             <span className="text-[13px] text-ink-muted-80">회사</span>
@@ -288,6 +291,40 @@ export default function Home() {
           </Card>
 
           <Card title="AI 설정">
+            <Row label="생성 모드">
+              <div role="radiogroup" aria-label="생성 모드" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={form.generation_mode === "db"}
+                  onClick={() => update("generation_mode", "db")}
+                  disabled={loading}
+                  title="태영건설 DB 어휘·표현을 그대로 사용"
+                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                    form.generation_mode === "db"
+                      ? "bg-primary text-white"
+                      : "text-ink-muted-80 hover:bg-surface-pearl"
+                  }`}
+                >
+                  DB 중심
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={form.generation_mode === "hybrid"}
+                  onClick={() => update("generation_mode", "hybrid")}
+                  disabled={loading}
+                  title="DB를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장"
+                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                    form.generation_mode === "hybrid"
+                      ? "bg-primary text-white"
+                      : "text-ink-muted-80 hover:bg-surface-pearl"
+                  }`}
+                >
+                  DB+AI 혼합
+                </button>
+              </div>
+            </Row>
             <Row label="사고 강도">
               <SegmentedControl
                 options={THINKING_LEVELS}
