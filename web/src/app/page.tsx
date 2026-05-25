@@ -22,7 +22,7 @@ type AssessResponse = {
 };
 
 const MODELS = [
-  { value: "", label: "자동 (AI 추론 수준에 따라 결정)" },
+  { value: "", label: "자동 (균형 모드)" },
   { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (최신·빠름)" },
   { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview (고성능)" },
   { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash-Lite Preview (경량)" },
@@ -33,13 +33,6 @@ const MODELS = [
 
 const THINKING_LEVELS = ["fast", "balanced", "thorough", "max"] as const;
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];
-
-const THINKING_LABELS: Record<ThinkingLevel, string> = {
-  fast: "속도 우선",
-  balanced: "균형",
-  thorough: "품질 우선",
-  max: "최고 품질",
-};
 
 const COMPANIES = ["태영건설", "농어촌공사"] as const;
 type Company = (typeof COMPANIES)[number];
@@ -372,7 +365,7 @@ export default function Home() {
                     onClick={() => update("generation_mode", "db")}
                     disabled={loading}
                     title="태영건설 DB 어휘·표현을 그대로 사용"
-                    className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                    className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors whitespace-nowrap ${
                       form.generation_mode === "db"
                         ? "bg-primary text-white"
                         : "text-ink-muted-80 hover:bg-surface-pearl"
@@ -387,45 +380,14 @@ export default function Home() {
                     onClick={() => update("generation_mode", "hybrid")}
                     disabled={loading}
                     title="DB를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장"
-                    className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                    className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors whitespace-nowrap ${
                       form.generation_mode === "hybrid"
                         ? "bg-primary text-white"
                         : "text-ink-muted-80 hover:bg-surface-pearl"
                     }`}
                   >
-                    DB+AI 혼합
+                    태영건설 지식 + AI 혼합
                   </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide shrink-0">AI 추론 수준</span>
-                <div role="radiogroup" aria-label="AI 추론 수준" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  {THINKING_LEVELS.map((level) => (
-                    <button
-                      key={level}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.thinking_level === level}
-                      onClick={() => update("thinking_level", level)}
-                      disabled={loading}
-                      title={
-                        level === "fast"
-                          ? "Gemini 2.5 Flash — 빠르게 즉답"
-                          : level === "balanced"
-                          ? "Gemini 2.5 Pro — 속도/품질 균형 (기본값)"
-                          : level === "thorough"
-                          ? "Gemini 3.1 Pro Preview — 8K 토큰까지 추론, 꼼꼼히"
-                          : "Gemini 3.1 Pro Preview — 24K 토큰까지 추론, 가장 깊게"
-                      }
-                      className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
-                        form.thinking_level === level
-                          ? "bg-primary text-white"
-                          : "text-ink-muted-80 hover:bg-surface-pearl"
-                      }`}
-                    >
-                      {THINKING_LABELS[level]}
-                    </button>
-                  ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 min-w-0 max-w-full">
