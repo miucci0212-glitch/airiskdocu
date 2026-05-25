@@ -51,6 +51,13 @@ type GenerationMode = "db" | "hybrid";
 const THINKING_LEVELS = ["fast", "balanced", "thorough", "max"] as const;
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
+const THINKING_LABELS: Record<ThinkingLevel, string> = {
+  fast: "속도 우선",
+  balanced: "균형",
+  thorough: "품질 우선",
+  max: "최고 품질",
+};
+
 const MODELS = [
   { value: "", label: "자동 (AI 추론 수준에 따라 결정)" },
   { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (최신·빠름)" },
@@ -591,7 +598,7 @@ export function KrcForm() {
                     : "text-ink-muted-80 hover:bg-surface-pearl"
                 }`}
               >
-                DB 중심
+                농어촌공사 지식 중심
               </button>
               <button
                 type="button"
@@ -636,7 +643,7 @@ export function KrcForm() {
                       : "text-ink-muted-80 hover:bg-surface-pearl"
                   }`}
                 >
-                  {level}
+                  {THINKING_LABELS[level]}
                 </button>
               ))}
             </div>

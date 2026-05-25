@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KrcForm } from "./krc-form";
 
 const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
@@ -33,6 +33,13 @@ const MODELS = [
 
 const THINKING_LEVELS = ["fast", "balanced", "thorough", "max"] as const;
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+const THINKING_LABELS: Record<ThinkingLevel, string> = {
+  fast: "속도 우선",
+  balanced: "균형",
+  thorough: "품질 우선",
+  max: "최고 품질",
+};
 
 const COMPANIES = ["태영건설", "농어촌공사"] as const;
 type Company = (typeof COMPANIES)[number];
@@ -98,6 +105,28 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [resp, setResp] = useState<AssessResponse | null>(null);
 
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    if (!loading) return;
+    const startTime = Date.now();
+    const id = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const ratio = 1 - Math.exp(-elapsed / 12000);
+      setProgress(Math.min(92, Math.round(ratio * 100)));
+    }, 150);
+    return () => {
+      clearInterval(id);
+      setProgress(100);
+      setTimeout(() => setProgress(0), 400);
+    };
+  }, [loading]);
+  const showLoadingModal = loading || progress > 0;
+
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [surveyRating, setSurveyRating] = useState<number | null>(null);
+  const [surveyComment, setSurveyComment] = useState("");
+  const [surveySubmitting, setSurveySubmitting] = useState(false);
+
   function update<K extends keyof typeof DEFAULT_REQUEST>(k: K, v: (typeof DEFAULT_REQUEST)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -107,6 +136,7 @@ export default function Home() {
   }
 
   async function runAssess() {
+    setProgress(3);
     setLoading(true);
     setError(null);
     setResp(null);
@@ -123,6 +153,42 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleDownloadClick() {
+    if (!resp) return;
+    setShowSurvey(true);
+  }
+
+  async function submitSurveyAndDownload() {
+    if (surveyRating === null) return;
+    setSurveySubmitting(true);
+    const gasUrl = process.env.NEXT_PUBLIC_SURVEY_GAS_URL || "";
+    if (gasUrl) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        await fetch(gasUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rating: surveyRating,
+            comment: surveyComment,
+            siteName: form.site_name,
+            writeDate: form.period.start,
+            writer: form.leader,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (err) {
+        console.warn("만족도 조사 구글 전송 중 오류 (다운로드는 진행됨):", err);
+      }
+    }
+    setSurveySubmitting(false);
+    setShowSurvey(false);
+    download();
   }
 
   async function download() {
@@ -312,7 +378,7 @@ export default function Home() {
                         : "text-ink-muted-80 hover:bg-surface-pearl"
                     }`}
                   >
-                    DB 중심
+                    태영건설 지식 중심
                   </button>
                   <button
                     type="button"
@@ -357,7 +423,7 @@ export default function Home() {
                           : "text-ink-muted-80 hover:bg-surface-pearl"
                       }`}
                     >
-                      {level}
+                      {THINKING_LABELS[level]}
                     </button>
                   ))}
                 </div>
@@ -443,12 +509,111 @@ export default function Home() {
             </PillButton>
             <PillButton
               variant="secondary"
-              onClick={download}
+              onClick={handleDownloadClick}
               loading={downloading}
               disabled={!resp || loading || downloading}
             >
               엑셀 다운로드
             </PillButton>
+          </div>
+        </div>
+      )}
+
+      {company === "태영건설" && showLoadingModal && (
+        <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 animate-fade-in bg-[#000]/45">
+          <div className="bg-white/95 backdrop-blur-md rounded-[24px] border border-hairline p-8 max-w-sm w-full shadow-[0_20px_50px_rgba(0,0,0,0.25)] flex flex-col gap-6 text-center animate-scale-up">
+            <div>
+              <div className="text-[32px] mb-2">🤖</div>
+              <h3 className="text-[18px] font-extrabold tracking-[-0.5px] text-ink">
+                위험성평가 생성 중
+              </h3>
+              <p className="text-[12px] text-ink-muted-48 mt-1.5 leading-relaxed">
+                태영건설 DB 검색 + AI 분석을<br />
+                진행하고 있습니다
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="h-3 w-full rounded-full bg-[#e8e8ed] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="text-[14px] font-semibold text-primary tabular-nums">
+                {progress}%
+              </div>
+            </div>
+            <p className="text-[11px] text-ink-muted-48 leading-relaxed">
+              평균 20~30초 소요됩니다. 잠시만 기다려주세요.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {company === "태영건설" && showSurvey && (
+        <div className="fixed inset-0 bg-[#000]/65 backdrop-blur-[8px] z-[9999] flex items-center justify-center p-3 sm:p-4 animate-fade-in overflow-y-auto">
+          <div
+            className="bg-white rounded-[20px] sm:rounded-[24px] border border-hairline p-5 sm:p-7 max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex flex-col gap-4 sm:gap-6 text-center animate-scale-up my-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto"
+            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <div className="text-[26px] sm:text-[28px] mb-1.5 sm:mb-2 animate-bounce">🌟</div>
+              <h3 className="text-[17px] sm:text-[19px] font-extrabold tracking-[-0.5px] text-ink">
+                서비스가 만족스러우셨나요?
+              </h3>
+              <p className="text-[12px] sm:text-[13px] text-ink-muted-48 mt-1.5 leading-relaxed">
+                태영건설 위험성평가 도우미 서비스 개선을 위해<br />
+                짧은 만족도 한 마디를 부탁드립니다!
+              </p>
+            </div>
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2.5 my-1">
+              {[
+                { val: 1, label: "아쉬움", emoji: "😡" },
+                { val: 2, label: "그저끎", emoji: "😟" },
+                { val: 3, label: "보통", emoji: "😐" },
+                { val: 4, label: "만족", emoji: "🙂" },
+                { val: 5, label: "매우만족", emoji: "😍" },
+              ].map((item) => (
+                <button
+                  key={item.val}
+                  type="button"
+                  onClick={() => setSurveyRating(item.val)}
+                  className={`flex flex-col items-center justify-center py-2 px-0.5 sm:py-2.5 sm:px-1 rounded-[12px] sm:rounded-[16px] border transition-all duration-200 active:scale-95 min-w-0 ${
+                    surveyRating === item.val
+                      ? "border-primary bg-primary/5 text-primary scale-105 shadow-[0_4px_12px_rgba(var(--primary-rgb),0.12)]"
+                      : "border-hairline hover:border-ink-muted-48 hover:bg-surface-pearl text-ink-muted-80"
+                  }`}
+                >
+                  <span className="text-[20px] sm:text-[24px] mb-1 sm:mb-1.5 select-none leading-none">{item.emoji}</span>
+                  <span className="text-[9px] sm:text-[10px] font-semibold leading-tight whitespace-nowrap">{item.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[11px] font-bold text-ink-muted-48 uppercase tracking-wider ml-1">의견 또는 건의사항 (선택)</label>
+              <textarea
+                value={surveyComment}
+                onChange={(e) => setSurveyComment(e.target.value)}
+                maxLength={200}
+                className="w-full rounded-[14px] border border-hairline bg-canvas p-3 outline-none focus:border-primary-focus focus:ring-1 focus:ring-primary-focus h-20 resize-none leading-relaxed text-[13px]"
+                placeholder="도움이 된 점이나 아쉬웠던 점을 적어주시면 서비스 개선에 큰 힘이 됩니다."
+              />
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                disabled={surveyRating === null || surveySubmitting}
+                onClick={submitSurveyAndDownload}
+                className={`w-full py-3 rounded-full text-[14px] sm:text-[15px] font-semibold transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.05)] ${
+                  surveyRating !== null
+                    ? "bg-primary hover:bg-primary-focus text-on-primary hover:shadow-[0_4px_12px_rgba(var(--primary-rgb),0.2)] active:scale-[0.98]"
+                    : "bg-[#e8e8ed] text-ink-muted-48 cursor-not-allowed"
+                }`}
+              >
+                {surveySubmitting ? "만족도 제출 중..." : "만족도 제출 및 엑셀 다운로드"}
+              </button>
+            </div>
           </div>
         </div>
       )}
