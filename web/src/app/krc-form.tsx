@@ -48,6 +48,9 @@ type KrcAssessResponse = { rows: KrcRow[]; sources: KrcHit[] };
 
 type GenerationMode = "db" | "hybrid";
 
+const THINKING_LEVELS = ["fast", "balanced", "thorough", "max"] as const;
+type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
 const MAX_ENTRIES = 3;
 
 const DEFAULTS = {
@@ -166,6 +169,7 @@ export function KrcForm() {
 
   const [items, setItems] = useState<KrcItem[]>(defaultItems);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("hybrid");
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("balanced");
 
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -297,6 +301,7 @@ export function KrcForm() {
             equipment,
           })),
           generation_mode: generationMode,
+          thinking_level: thinkingLevel,
         }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
@@ -553,43 +558,76 @@ export function KrcForm() {
         </div>
       )}
 
-      <div className="rounded-[11px] border border-hairline bg-surface-pearl px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-[11px] border border-hairline bg-surface-pearl px-4 py-3 flex flex-col gap-3">
         <div className="text-[13px] text-ink-muted-80 leading-relaxed">
           위험요인, 재해유형, 안전대책 및 위험성 등급을 포함한 모든 항목이 농어촌공사 DB와 AI 분석을 통해 자동으로 작성됩니다.
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide">생성 모드</span>
-          <div role="radiogroup" aria-label="생성 모드" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={generationMode === "db"}
-              onClick={() => setGenerationMode("db")}
-              disabled={loading}
-              title="농어촌공사 DB 어휘·표현을 그대로 사용"
-              className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
-                generationMode === "db"
-                  ? "bg-primary text-white"
-                  : "text-ink-muted-80 hover:bg-surface-pearl"
-              }`}
-            >
-              DB 중심
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={generationMode === "hybrid"}
-              onClick={() => setGenerationMode("hybrid")}
-              disabled={loading}
-              title="DB를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장"
-              className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
-                generationMode === "hybrid"
-                  ? "bg-primary text-white"
-                  : "text-ink-muted-80 hover:bg-surface-pearl"
-              }`}
-            >
-              DB+AI 혼합
-            </button>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide">생성 모드</span>
+            <div role="radiogroup" aria-label="생성 모드" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={generationMode === "db"}
+                onClick={() => setGenerationMode("db")}
+                disabled={loading}
+                title="농어촌공사 DB 어휘·표현을 그대로 사용"
+                className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                  generationMode === "db"
+                    ? "bg-primary text-white"
+                    : "text-ink-muted-80 hover:bg-surface-pearl"
+                }`}
+              >
+                DB 중심
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={generationMode === "hybrid"}
+                onClick={() => setGenerationMode("hybrid")}
+                disabled={loading}
+                title="DB를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장"
+                className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                  generationMode === "hybrid"
+                    ? "bg-primary text-white"
+                    : "text-ink-muted-80 hover:bg-surface-pearl"
+                }`}
+              >
+                DB+AI 혼합
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide">AI 추론 수준</span>
+            <div role="radiogroup" aria-label="AI 추론 수준" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              {THINKING_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  role="radio"
+                  aria-checked={thinkingLevel === level}
+                  onClick={() => setThinkingLevel(level)}
+                  disabled={loading}
+                  title={
+                    level === "fast"
+                      ? "Gemini 2.5 Flash — 빠르게 즉답"
+                      : level === "balanced"
+                      ? "Gemini 2.5 Pro — 속도/품질 균형 (기본값)"
+                      : level === "thorough"
+                      ? "Gemini 3.1 Pro Preview — 8K 토큰까지 추론, 꼼꼼히"
+                      : "Gemini 3.1 Pro Preview — 24K 토큰까지 추론, 가장 깊게"
+                  }
+                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                    thinkingLevel === level
+                      ? "bg-primary text-white"
+                      : "text-ink-muted-80 hover:bg-surface-pearl"
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

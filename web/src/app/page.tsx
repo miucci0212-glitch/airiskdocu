@@ -325,7 +325,7 @@ export default function Home() {
                 </button>
               </div>
             </Row>
-            <Row label="사고 강도">
+            <Row label="AI 추론 수준">
               <SegmentedControl
                 options={THINKING_LEVELS}
                 value={form.thinking_level}

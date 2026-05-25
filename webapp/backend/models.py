@@ -142,6 +142,8 @@ class KrcAssessRequest(BaseModel):
         "hybrid",
         description="db=농어촌공사 DB 어휘에 충실, hybrid=DB를 시드로 LLM이 일반 건설지식으로 확장",
     )
+    thinking_level: Literal["fast", "balanced", "thorough", "max"] = "balanced"
+    model_override: Optional[str] = None
 
 
 class KrcAssessResponse(BaseModel):

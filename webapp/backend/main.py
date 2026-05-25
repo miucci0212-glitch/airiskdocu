@@ -183,7 +183,8 @@ def krc_assess(req: KrcAssessRequest):
         api_key=settings.gemini_api_key,
         default_executor=default_executor,
         default_verifier=default_verifier,
-        model_override="gemini-2.5-flash",
+        thinking_level=req.thinking_level,
+        model_override=req.model_override,
         generation_mode=req.generation_mode,
     )
 
