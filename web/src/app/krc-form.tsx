@@ -320,19 +320,33 @@ export function KrcForm() {
         body: JSON.stringify({ metadata: metadataPayload(), rows }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+
+      // 응답 헤더의 Content-Type을 우선 사용해 실제 xlsx 시그니처를 보존.
+      // (백엔드는 application/vnd.openxmlformats-officedocument.spreadsheetml.sheet 반환)
+      const contentType =
+        r.headers.get("content-type") ||
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
       const rawBlob = await r.blob();
-      const blob = new Blob([rawBlob], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const blob = rawBlob.type ? rawBlob : new Blob([rawBlob], { type: contentType });
+
       const suffix = krcType === "최초/정기" ? "최초정기" : "수시";
       const safeSite = (siteName || "현장").replaceAll(" ", "_").slice(0, 20);
       const dateStr = writeDate.replaceAll("-", "");
+      const filename = `위험성평가서_${suffix}_${safeSite}_${dateStr}.xlsx`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `위험성평가서_${suffix}_${safeSite}_${dateStr}.xlsx`;
+      a.download = filename;
+      a.rel = "noopener";
+      // 일부 브라우저(특히 Firefox, iOS Safari)는 anchor가 DOM에 붙어 있어야
+      // 다운로드 트리거가 동작한다. 클릭 후 다음 tick에 정리.
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 0);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
