@@ -194,6 +194,7 @@ def _build_krc_prompt(
     rag_hits_per_item: list[list[dict]],
     default_executor: str,
     default_verifier: str,
+    generation_mode: str = "hybrid",
 ) -> str:
     sections = []
     for i, (item, hits) in enumerate(zip(items, rag_hits_per_item)):
@@ -213,16 +214,43 @@ def _build_krc_prompt(
         )
 
     body = "\n".join(sections)
+
+    if generation_mode == "hybrid":
+        guidance = (
+            "## 도출 방침 (DB+LLM 혼합)\n"
+            "- RAG 참고는 농어촌공사 DB에서 가져온 시드(seed)입니다. 그대로 베끼지 말고 작업·장비·환경에 맞게 재구성하세요.\n"
+            "- RAG에 없는 위험요인이라도 해당 작업에서 실제 발생 가능하다면 일반 건설 안전 지식을 활용해 적극 포함하세요.\n"
+            "- 입력 항목 1개당 3행은 가능한 한 서로 다른 재해형태를 다루도록 다양화하세요 "
+            "(예: 추락·감전·끼임·화재·맞음·깔림·붕괴·베임·근골격계·질병·유해물질 노출 등).\n"
+            "- 표현·어조는 농어촌공사 위험성평가서 양식에 맞춰 간결한 한 문장으로 작성하세요.\n"
+        )
+        hazard_field_desc = (
+            "hazard (string): 해당 작업·장비·환경에서 발생 가능한 구체적 위험요인 한 문장. "
+            "RAG를 시드로 활용하되 일반 건설 안전 지식을 결합해 폭넓게 도출."
+        )
+    else:  # db
+        guidance = (
+            "## 도출 방침 (DB 중심)\n"
+            "- RAG 참고에 제시된 농어촌공사 DB 위험요인을 그대로 활용하거나 가깝게 재서술하세요.\n"
+            "- RAG에서 다루지 않은 주제는 가급적 추가하지 말고, DB 어휘와 표현 방식을 유지하세요.\n"
+            "- 입력 항목 1개당 3행은 서로 중복되지 않게 RAG 결과에서 골라 구성하세요.\n"
+        )
+        hazard_field_desc = (
+            "hazard (string): RAG에 등장한 농어촌공사 DB 위험요인을 기반으로 작성한 한 문장. "
+            "DB 어휘를 유지하고 임의 확장 금지."
+        )
+
     return f"""당신은 농어촌공사 건설 현장 위험성평가서를 작성하는 전문가입니다.
 아래 입력 항목 {len(items)}개 각각에 대해, 해당 세부작업에서 발생할 수 있는 서로 다른 3가지 주요 위험 상황(위험요인)을 도출하여 총 {3 * len(items)}개의 위험성평가 행을 생성하세요. (입력 항목 1개당 반드시 3개의 독립적인 위험성평가 행이 생성되어야 합니다.)
 
 {body}
 
+{guidance}
 ## 출력 스펙
 - 입력 항목 수의 정확히 3배인 총 {3 * len(items)}개 객체로 구성된 JSON 배열을 반환
 - 배열의 순서는 입력 항목 1에 대한 3개 행, 이어서 입력 항목 2에 대한 3개 행 순이어야 합니다.
 - 각 객체 필드:
-  - hazard (string): 해당 작업 및 장비에서 발생 가능한 구체적인 위험요인 한 문장 (RAG 참고하여 서로 다르게 3개 도출)
+  - {hazard_field_desc}
   - accident_type (string): 재해형태 단답 (예: 떨어짐, 부딪힘, 끼임, 감전, 화재, 맞음, 깔림, 베임, 무리한동작 등)
   - frequency (int 1-3): 빈도 (1=낮음, 2=보통, 3=높음)
   - severity (int 1-3): 강도 (1=경상, 2=중상, 3=중대)
@@ -272,8 +300,14 @@ def generate_krc(
     default_verifier: str = "공사감독",
     thinking_level: str = "balanced",
     model_override: Optional[str] = None,
+    generation_mode: Literal["db", "hybrid"] = "hybrid",
 ) -> tuple[list[dict], bool]:
-    """LLM으로 KRC 행 데이터를 생성. fallback_used=True면 RAG top-3로 폴백."""
+    """LLM으로 KRC 행 데이터를 생성. fallback_used=True면 RAG top-3로 폴백.
+
+    generation_mode:
+      - "db": RAG hits를 거의 그대로 재서술 (DB 어휘 유지)
+      - "hybrid": RAG를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장
+    """
     fallback = []
     generic_counter = 0
     for item, hits in zip(items, rag_hits_per_item):
@@ -317,7 +351,10 @@ def generate_krc(
     if not api_key:
         return fallback, True
 
-    prompt = _build_krc_prompt(items, rag_hits_per_item, default_executor, default_verifier)
+    prompt = _build_krc_prompt(
+        items, rag_hits_per_item, default_executor, default_verifier,
+        generation_mode=generation_mode,
+    )
     budget = get_thinking_budget(thinking_level)
     model_name = model_override or MODEL_MAP.get(thinking_level, "gemini-2.5-pro")
 
@@ -357,6 +394,8 @@ def _build_krc_expand_prompt(
     items: list[dict],
     existing_hazards: list[str],
     count: int,
+    rag_hits: Optional[list[dict]] = None,
+    generation_mode: str = "hybrid",
 ) -> str:
     items_text = "\n".join(
         f"- 세부작업: {it.get('detail_work','')} / 작업위치: {it.get('work_location','')} / "
@@ -364,6 +403,36 @@ def _build_krc_expand_prompt(
         for it in items
     ) or "  (없음)"
     existing_text = "\n".join(f"- {h}" for h in existing_hazards if h) or "  (없음)"
+
+    rag_text = ""
+    if rag_hits:
+        seen: set[str] = set()
+        bullets: list[str] = []
+        for h in rag_hits:
+            hz = str(h.get("hazard", "")).strip()
+            if not hz or hz in seen:
+                continue
+            seen.add(hz)
+            bullets.append(
+                f"- {hz} / 재해형태: {h.get('accident','')} / 대책: {str(h.get('controls',''))[:200]}"
+            )
+            if len(bullets) >= 8:
+                break
+        if bullets:
+            rag_text = "\n## 농어촌공사 DB 참고 (RAG)\n" + "\n".join(bullets) + "\n"
+
+    if generation_mode == "hybrid":
+        guidance = (
+            "## 도출 방침 (DB+LLM 혼합)\n"
+            "- RAG 참고가 있다면 시드로 활용하되, RAG에 없는 위험요인이라도 작업 환경에 실제로 존재하면 일반 건설 안전 지식을 활용해 적극 포함하세요.\n"
+            "- 이미 식별된 위험요인과 재해형태가 겹치지 않도록 다양화 (추락·감전·끼임·화재·맞음·깔림·붕괴·베임·근골격계·질병·유해물질 노출 등).\n"
+        )
+    else:  # db
+        guidance = (
+            "## 도출 방침 (DB 중심)\n"
+            "- RAG 참고에 제시된 농어촌공사 DB 위험요인을 우선 활용하세요.\n"
+            "- DB 어휘·표현을 유지하고, DB에 없는 주제로의 임의 확장은 피하세요.\n"
+        )
 
     return f"""당신은 농어촌공사 건설 현장 위험성평가서를 작성하는 전문가입니다.
 아래 작업 환경에 대해, 이미 식별된 위험요인과 중복되지 않는 새로운 위험요인 {count}개를 추가로 도출하세요.
@@ -373,7 +442,8 @@ def _build_krc_expand_prompt(
 
 ## 이미 식별된 위험요인 (중복 금지)
 {existing_text}
-
+{rag_text}
+{guidance}
 ## 출력 스펙
 - 정확히 {count}개 객체로 구성된 JSON 배열
 - 각 객체 필드:
@@ -399,6 +469,7 @@ def expand_krc(
     api_key: str,
     model_override: Optional[str] = None,
     rag_hits: Optional[list[dict]] = None,
+    generation_mode: Literal["db", "hybrid"] = "hybrid",
 ) -> tuple[list[dict], bool]:
     """기존 위험요인과 중복되지 않는 새 행 count개를 LLM으로 생성.
     fallback_used=True면 RAG hits에서 기존과 겹치지 않는 항목으로 채우거나(없으면) 빈 행."""
@@ -444,7 +515,10 @@ def expand_krc(
     if count <= 0 or not api_key:
         return build_rag_fallback(), True
 
-    prompt = _build_krc_expand_prompt(items, existing_hazards, count)
+    prompt = _build_krc_expand_prompt(
+        items, existing_hazards, count,
+        rag_hits=rag_hits, generation_mode=generation_mode,
+    )
     model_name = model_override or "gemini-2.5-flash"
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(

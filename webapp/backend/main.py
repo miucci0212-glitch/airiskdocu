@@ -183,6 +183,7 @@ def krc_assess(req: KrcAssessRequest):
         default_executor=default_executor,
         default_verifier=default_verifier,
         model_override="gemini-2.5-flash",
+        generation_mode=req.generation_mode,
     )
 
     rows: list[KrcRow] = []
@@ -251,6 +252,7 @@ def krc_expand(req: KrcExpandRequest):
         api_key=settings.gemini_api_key,
         model_override="gemini-2.5-flash",
         rag_hits=aggregated_hits,
+        generation_mode=req.generation_mode,
     )
 
     base = req.existing_rows[-1] if req.existing_rows else None

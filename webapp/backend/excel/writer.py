@@ -51,6 +51,7 @@ def fill_template(
 
     for i, row_data in enumerate(rows[:12]):
         excel_row = start_row + i
+        ws.row_dimensions[excel_row].height = 72
         loc_col = column_index_from_string(cm["location_col"])
         work_col = column_index_from_string(cm["work_col"])
 

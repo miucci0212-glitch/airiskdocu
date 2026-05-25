@@ -46,6 +46,8 @@ type KrcRow = {
 
 type KrcAssessResponse = { rows: KrcRow[]; sources: KrcHit[] };
 
+type GenerationMode = "db" | "hybrid";
+
 const MAX_ENTRIES = 3;
 
 const DEFAULTS = {
@@ -163,6 +165,7 @@ export function KrcForm() {
   const [inspectorSupervisor, setInspectorSupervisor] = useState<string>(DEFAULTS.inspectorSupervisor);
 
   const [items, setItems] = useState<KrcItem[]>(defaultItems);
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("hybrid");
 
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -256,6 +259,7 @@ export function KrcForm() {
           })),
           existing_rows: rows,
           count,
+          generation_mode: generationMode,
         }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
@@ -292,6 +296,7 @@ export function KrcForm() {
             work_location,
             equipment,
           })),
+          generation_mode: generationMode,
         }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
@@ -534,8 +539,45 @@ export function KrcForm() {
         </div>
       )}
 
-      <div className="rounded-[11px] border border-hairline bg-surface-pearl px-4 py-3 text-[13px] text-ink-muted-80">
-        위험요인, 재해유형, 안전대책 및 위험성 등급을 포함한 모든 항목이 농어촌공사 DB와 AI 분석을 통해 자동으로 작성됩니다.
+      <div className="rounded-[11px] border border-hairline bg-surface-pearl px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-[13px] text-ink-muted-80 leading-relaxed">
+          위험요인, 재해유형, 안전대책 및 위험성 등급을 포함한 모든 항목이 농어촌공사 DB와 AI 분석을 통해 자동으로 작성됩니다.
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide">생성 모드</span>
+          <div role="radiogroup" aria-label="생성 모드" className="inline-flex rounded-full border border-hairline bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={generationMode === "db"}
+              onClick={() => setGenerationMode("db")}
+              disabled={loading}
+              title="농어촌공사 DB 어휘·표현을 그대로 사용"
+              className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                generationMode === "db"
+                  ? "bg-primary text-white"
+                  : "text-ink-muted-80 hover:bg-surface-pearl"
+              }`}
+            >
+              DB 중심
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={generationMode === "hybrid"}
+              onClick={() => setGenerationMode("hybrid")}
+              disabled={loading}
+              title="DB를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장"
+              className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                generationMode === "hybrid"
+                  ? "bg-primary text-white"
+                  : "text-ink-muted-80 hover:bg-surface-pearl"
+              }`}
+            >
+              DB+AI 혼합
+            </button>
+          </div>
+        </div>
       </div>
 
       {error && (
