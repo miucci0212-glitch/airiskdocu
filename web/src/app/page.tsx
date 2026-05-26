@@ -11,6 +11,7 @@ type AssessRow = {
   hazard: string;
   control: string;
   note: string;
+  source: string;
 };
 
 type RagSource = { sheet: string; row_id: string; hazard_snippet: string };
@@ -838,7 +839,12 @@ function FormPreview({
                 {row?.work ?? ""}
               </td>
               <td className="whitespace-pre-wrap border-b border-l border-hairline px-3 py-3 leading-relaxed">
-                {row?.hazard ?? ""}
+                <div>{row?.hazard ?? ""}</div>
+                {row?.source && (
+                  <div className="mt-1 text-[11px] text-ink-muted-48 leading-tight">
+                    출처: {row.source}
+                  </div>
+                )}
               </td>
               <td className="whitespace-pre-wrap border-b border-l border-hairline px-3 py-3 leading-relaxed">
                 {row?.control ?? ""}

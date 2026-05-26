@@ -33,6 +33,33 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="위험성평가 도우미 API", version="1.0.0")
 
+
+def _format_taeyoung_source(r: dict) -> str:
+    sheet = str(r.get("sheet", "")).strip()
+    row_id = str(r.get("row_id", "")).strip()
+    if sheet and row_id:
+        return f"태영DB · {sheet} {row_id}행"
+    if sheet:
+        return f"태영DB · {sheet}"
+    return "태영DB"
+
+
+def _format_krc_source(h: dict) -> str:
+    label = (
+        str(h.get("sub_work") or "").strip()
+        or str(h.get("unit_work") or "").strip()
+        or str(h.get("work") or "").strip()
+    )
+    no = h.get("no")
+    no_str = str(no).strip() if no not in (None, "", 0) else ""
+    if label and no_str:
+        return f"농어촌DB · {label} {no_str}행"
+    if label:
+        return f"농어촌DB · {label}"
+    if no_str:
+        return f"농어촌DB · {no_str}행"
+    return "농어촌DB"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins.split(","),
@@ -77,6 +104,15 @@ def assess(req: AssessRequest):
         model_override=req.model_override,
         generation_mode=req.generation_mode,
     )
+
+    # 행별 출처 부여: db 모드는 전 행 RAG, hybrid 모드는 앞 절반 RAG / 뒤 절반 AI 생성
+    n = len(rows)
+    db_count = n if req.generation_mode == "db" else (n + 1) // 2
+    for i, row in enumerate(rows):
+        if i < db_count and rag_results:
+            row.source = _format_taeyoung_source(rag_results[i % len(rag_results)])
+        else:
+            row.source = "AI 생성"
 
     sources = [
         RagSource(sheet=r["sheet"], row_id=r["row_id"], hazard_snippet=r["hazard"][:50])
@@ -189,9 +225,12 @@ def krc_assess(req: KrcAssessRequest):
     )
 
     rows: list[KrcRow] = []
+    # 항목별 3행 중 db_per_item개는 DB 출처, 나머지는 AI 생성
+    db_per_item = 3 if req.generation_mode == "db" else 2
     for i, item in enumerate(req.items):
         item_gen_list = generated[3 * i : 3 * i + 3]
-        for gen in item_gen_list:
+        item_hits = all_hits_per_item[i] if i < len(all_hits_per_item) else []
+        for j, gen in enumerate(item_gen_list):
             freq = gen.get("frequency")
             sev = gen.get("severity")
             imp_freq = gen.get("improved_frequency")
@@ -202,6 +241,10 @@ def krc_assess(req: KrcAssessRequest):
                 improved_risk = f"{imp_freq}/{imp_sev} ({imp_grade})" if imp_grade else f"{imp_freq}/{imp_sev}"
             else:
                 improved_risk = ""
+            if j < db_per_item and item_hits:
+                source = _format_krc_source(item_hits[j % len(item_hits)])
+            else:
+                source = "AI 생성"
             rows.append(KrcRow(
                 detail_work=item.detail_work,
                 work_location=item.work_location,
@@ -216,6 +259,7 @@ def krc_assess(req: KrcAssessRequest):
                 improvement_due="",
                 executor="",
                 verifier="",
+                source=source,
             ))
     return KrcAssessResponse(rows=rows, sources=all_sources)
 
@@ -288,6 +332,7 @@ def krc_expand(req: KrcExpandRequest):
             improvement_due="",
             executor="",
             verifier="",
+            source="AI 생성",
         ))
     return KrcAssessResponse(rows=rows, sources=[])
 

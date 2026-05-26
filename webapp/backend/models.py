@@ -34,6 +34,7 @@ class AssessRow(BaseModel):
     hazard: str
     control: str
     note: str = ""
+    source: str = ""
 
 
 class RagSource(BaseModel):
@@ -130,6 +131,7 @@ class KrcRow(BaseModel):
     improvement_due: str = ""
     executor: str = ""
     verifier: str = ""
+    source: str = ""
 
 
 GenerationMode = Literal["db", "hybrid"]

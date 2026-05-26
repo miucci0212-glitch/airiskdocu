@@ -42,6 +42,7 @@ type KrcRow = {
   improvement_due: string;
   executor: string;
   verifier: string;
+  source: string;
 };
 
 type KrcAssessResponse = { rows: KrcRow[]; sources: KrcHit[] };
@@ -156,6 +157,7 @@ function defaultRows(): KrcRow[] {
         improvement_due: "",
         executor: "",
         verifier: "",
+        source: "",
       });
     }
   });
@@ -1059,6 +1061,11 @@ function KrcPreview({
                       <div className="text-[12px] text-ink p-1 leading-relaxed">
                         {r.hazard || <span className="text-ink-muted-48">자동 생성 중...</span>}
                       </div>
+                      {r.source && (
+                        <div className="px-1 pb-1 text-[10px] text-ink-muted-48 leading-tight">
+                          출처: {r.source}
+                        </div>
+                      )}
                     </Td>
                     <Td rowSpan={2} className="text-center align-middle bg-canvas">
                       <div className="text-[12px] text-ink text-center p-1 font-medium">
