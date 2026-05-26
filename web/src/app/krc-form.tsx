@@ -682,6 +682,13 @@ export function KrcForm() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => addRows(5)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 hover:bg-primary/20 px-4 py-2 text-[12px] font-semibold text-primary shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors active:scale-95"
+              >
+                ➕ 5줄 추가
+              </button>
+              <button
+                type="button"
                 onClick={() => addRows(3)}
                 className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 hover:bg-primary/20 px-4 py-2 text-[12px] font-semibold text-primary shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors active:scale-95"
               >
@@ -1156,8 +1163,15 @@ function KrcPreview({
         </div>
       </div>
 
-      {/* 3줄 추가 / 1줄 추가 버튼 추가 */}
+      {/* 5줄 / 3줄 / 1줄 추가 버튼 */}
       <div className="flex items-center justify-center gap-3 py-2">
+        <button
+          type="button"
+          onClick={() => onAddRows(5)}
+          className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 hover:bg-primary/20 px-5 py-2 text-[13px] font-semibold text-primary shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors active:scale-95"
+        >
+          ➕ 5줄 추가
+        </button>
         <button
           type="button"
           onClick={() => onAddRows(3)}

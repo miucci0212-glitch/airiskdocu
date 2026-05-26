@@ -13,7 +13,7 @@ from models import KrcMetadata, KrcRow
 
 BODY_START_ROW = 10
 ROWS_PER_ENTRY = 2
-MAX_ENTRIES = 3
+MAX_ENTRIES = 5
 # 페이지 2+에서 삭제할 상단 행 수 (현장명/작성일/결재/작성자/관리기간/빈줄)
 HEADER_ROWS_TO_STRIP = 7
 
