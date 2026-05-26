@@ -12,7 +12,12 @@ type KrcItem = {
   detail_work: string;
   work_location: string;
   equipment: string;
+  row_count: number;
 };
+
+const ROW_COUNT_MIN = 1;
+const ROW_COUNT_MAX = 10;
+const ROW_COUNT_DEFAULT = 3;
 
 type KrcHit = {
   no: number;
@@ -95,6 +100,7 @@ function emptyItem(): KrcItem {
     detail_work: "",
     work_location: "",
     equipment: "",
+    row_count: ROW_COUNT_DEFAULT,
   };
 }
 
@@ -105,14 +111,21 @@ function defaultItems(): KrcItem[] {
       detail_work: "출입구 도어 시공 및 고정 작업",
       work_location: "현장출입구",
       equipment: "핸드그라인더, 고속절단기, 수공구",
+      row_count: ROW_COUNT_DEFAULT,
     },
     {
       id: "default-2",
       detail_work: "출입구 도어 주위 코킹(실란트) 마감",
       work_location: "현장출입구 및 외부 감리실",
       equipment: "코킹건, 사다리, 실란트",
+      row_count: ROW_COUNT_DEFAULT,
     },
   ];
+}
+
+function clampRowCount(n: number): number {
+  if (!Number.isFinite(n)) return ROW_COUNT_DEFAULT;
+  return Math.max(ROW_COUNT_MIN, Math.min(ROW_COUNT_MAX, Math.round(n)));
 }
 
 function toNum(v: unknown): number | null {
@@ -306,10 +319,11 @@ export function KrcForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           metadata: metadataPayload(),
-          items: filledItems.map(({ detail_work, work_location, equipment }) => ({
+          items: filledItems.map(({ detail_work, work_location, equipment, row_count }) => ({
             detail_work,
             work_location,
             equipment,
+            row_count: clampRowCount(row_count),
           })),
           generation_mode: generationMode,
           thinking_level: thinkingLevel,
@@ -520,18 +534,24 @@ export function KrcForm() {
 
         {items.map((it, idx) => (
           <section key={it.id} className="rounded-[18px] border border-hairline bg-canvas">
-            <div className="flex items-center justify-between px-5 pt-4 pb-2">
+            <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-2">
               <h3 className="text-[13px] font-semibold tracking-[-0.2px] text-ink-muted-80">
                 항목 {idx + 1}
               </h3>
-              <button
-                type="button"
-                disabled={items.length <= 1}
-                onClick={() => removeItem(it.id)}
-                className="text-[12px] text-ink-muted-48 hover:text-ink disabled:opacity-30"
-              >
-                삭제
-              </button>
+              <div className="flex items-center gap-3">
+                <RowCountStepper
+                  value={it.row_count}
+                  onChange={(v) => updateItem(it.id, { row_count: clampRowCount(v) })}
+                />
+                <button
+                  type="button"
+                  disabled={items.length <= 1}
+                  onClick={() => removeItem(it.id)}
+                  className="text-[12px] text-ink-muted-48 hover:text-ink disabled:opacity-30"
+                >
+                  삭제
+                </button>
+              </div>
             </div>
             <div className="divide-y divide-divider-soft">
               <Row label="세부작업 (단위작업)">
@@ -1263,6 +1283,55 @@ function Text({
         muted ? "text-ink-muted-48" : "text-ink"
       }`}
     />
+  );
+}
+
+function RowCountStepper({
+  value,
+  onChange,
+  min = ROW_COUNT_MIN,
+  max = ROW_COUNT_MAX,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const safe = Number.isFinite(value) ? Math.round(value) : ROW_COUNT_DEFAULT;
+  const canInc = safe < max;
+  const canDec = safe > min;
+  return (
+    <div
+      className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-white px-2 py-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+      title="이 항목에서 생성할 위험성평가 행 개수"
+    >
+      <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide select-none">
+        생성 행
+      </span>
+      <span className="tabular-nums text-[13px] font-bold text-ink min-w-[18px] text-center select-none">
+        {safe}
+      </span>
+      <div className="flex flex-col -my-0.5 leading-none">
+        <button
+          type="button"
+          aria-label="행 수 증가"
+          disabled={!canInc}
+          onClick={() => onChange(safe + 1)}
+          className="text-[9px] text-ink-muted-80 hover:text-primary disabled:opacity-30 leading-none px-0.5"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          aria-label="행 수 감소"
+          disabled={!canDec}
+          onClick={() => onChange(safe - 1)}
+          className="text-[9px] text-ink-muted-80 hover:text-primary disabled:opacity-30 leading-none px-0.5"
+        >
+          ▼
+        </button>
+      </div>
+    </div>
   );
 }
 

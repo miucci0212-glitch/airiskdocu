@@ -38,6 +38,10 @@ type Company = (typeof COMPANIES)[number];
 
 type GenerationMode = "db" | "hybrid";
 
+const TY_ROW_COUNT_MIN = 1;
+const TY_ROW_COUNT_MAX = 12;
+const TY_ROW_COUNT_DEFAULT = 3;
+
 const DEFAULT_REQUEST = {
   site_name: "",
   vendor: "",
@@ -53,10 +57,16 @@ const DEFAULT_REQUEST = {
   site_manager: "",
   locations_csv: "",
   work_description: "",
+  row_count: TY_ROW_COUNT_DEFAULT,
   thinking_level: "balanced" as ThinkingLevel,
   model_override: "",
   generation_mode: "hybrid" as GenerationMode,
 };
+
+function clampTyRowCount(n: number): number {
+  if (!Number.isFinite(n)) return TY_ROW_COUNT_DEFAULT;
+  return Math.max(TY_ROW_COUNT_MIN, Math.min(TY_ROW_COUNT_MAX, Math.round(n)));
+}
 
 function toRequest(form: typeof DEFAULT_REQUEST) {
   return {
@@ -71,6 +81,7 @@ function toRequest(form: typeof DEFAULT_REQUEST) {
     machinery: form.machinery,
     locations: form.locations_csv.split(",").map((s) => s.trim()).filter(Boolean),
     work_description: form.work_description,
+    row_count: clampTyRowCount(form.row_count),
     thinking_level: form.thinking_level,
     model_override: form.model_override || null,
     generation_mode: form.generation_mode,
@@ -123,7 +134,7 @@ export default function Home() {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  function isDefaultText(key: Exclude<keyof typeof DEFAULT_REQUEST, "period" | "headcount" | "thinking_level" | "model_override">) {
+  function isDefaultText(key: Exclude<keyof typeof DEFAULT_REQUEST, "period" | "headcount" | "row_count" | "thinking_level" | "model_override">) {
     return form[key] === DEFAULT_REQUEST[key] && DEFAULT_REQUEST[key] !== "";
   }
 
@@ -249,7 +260,15 @@ export default function Home() {
             </Row>
           </Card>
 
-          <Card title="작업 정보">
+          <Card
+            title="작업 정보"
+            action={
+              <RowCountStepper
+                value={form.row_count}
+                onChange={(v) => update("row_count", clampTyRowCount(v))}
+              />
+            }
+          >
             <Row label="작업기간 시작">
               <TextField
                 type="date"
@@ -589,14 +608,72 @@ export default function Home() {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-[18px] border border-hairline bg-canvas">
-      <h2 className="px-5 pt-4 pb-2 text-[13px] font-semibold tracking-[-0.2px] text-ink-muted-80">
-        {title}
-      </h2>
+      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-2">
+        <h2 className="text-[13px] font-semibold tracking-[-0.2px] text-ink-muted-80">{title}</h2>
+        {action}
+      </div>
       <div className="divide-y divide-divider-soft">{children}</div>
     </section>
+  );
+}
+
+function RowCountStepper({
+  value,
+  onChange,
+  min = TY_ROW_COUNT_MIN,
+  max = TY_ROW_COUNT_MAX,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const safe = Number.isFinite(value) ? Math.round(value) : TY_ROW_COUNT_DEFAULT;
+  const canInc = safe < max;
+  const canDec = safe > min;
+  return (
+    <div
+      className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-white px-2 py-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+      title="생성할 위험성평가 행 개수"
+    >
+      <span className="text-[11px] font-semibold text-ink-muted-48 tracking-wide select-none">
+        생성 행
+      </span>
+      <span className="tabular-nums text-[13px] font-bold text-ink min-w-[18px] text-center select-none">
+        {safe}
+      </span>
+      <div className="flex flex-col -my-0.5 leading-none">
+        <button
+          type="button"
+          aria-label="행 수 증가"
+          disabled={!canInc}
+          onClick={() => onChange(safe + 1)}
+          className="text-[9px] text-ink-muted-80 hover:text-primary disabled:opacity-30 leading-none px-0.5"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          aria-label="행 수 감소"
+          disabled={!canDec}
+          onClick={() => onChange(safe - 1)}
+          className="text-[9px] text-ink-muted-80 hover:text-primary disabled:opacity-30 leading-none px-0.5"
+        >
+          ▼
+        </button>
+      </div>
+    </div>
   );
 }
 

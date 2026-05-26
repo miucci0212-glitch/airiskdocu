@@ -50,6 +50,7 @@ def build_prompt(
     locations: list[str],
     rag_results: list[dict],
     generation_mode: str = "hybrid",
+    row_count: int = 3,
 ) -> str:
     rag_text = "\n".join(
         f"[{i+1}] 공종:{r['trade']} | 세부작업:{r['work_detail']} | "
@@ -91,7 +92,7 @@ def build_prompt(
 
 {guidance}
 ## 출력 형식
-반드시 JSON 배열로만 응답하세요. 각 항목:
+반드시 정확히 {row_count}개 객체로 구성된 JSON 배열로만 응답하세요. 각 항목:
 {{"location": "작업장소", "work": "작업내용", "hazard": "위험요인 상세 서술", "control": "- 대책1\\n- 대책2", "note": ""}}
 """
 
@@ -211,6 +212,7 @@ def _build_krc_prompt(
     rag_hits_per_item: list[list[dict]],
     default_executor: str,
     default_verifier: str,
+    row_counts: list[int],
     generation_mode: str = "hybrid",
 ) -> str:
     sections = []
@@ -223,7 +225,7 @@ def _build_krc_prompt(
             for j, h in enumerate(hits[:5])
         ) or "  (RAG 결과 없음)"
         sections.append(
-            f"### 입력 항목 {i+1}\n"
+            f"### 입력 항목 {i+1} (생성 행 수: {row_counts[i]})\n"
             f"- 세부작업: {item.get('detail_work','')}\n"
             f"- 작업위치: {item.get('work_location','')}\n"
             f"- 사용장비/설비/인원: {item.get('equipment','')}\n\n"
@@ -231,13 +233,17 @@ def _build_krc_prompt(
         )
 
     body = "\n".join(sections)
+    total_rows = sum(row_counts)
+    counts_summary = ", ".join(
+        f"항목 {i+1}: {row_counts[i]}행" for i in range(len(items))
+    )
 
     if generation_mode == "hybrid":
         guidance = (
             "## 도출 방침 (DB+LLM 혼합)\n"
             "- RAG 참고는 농어촌공사 DB에서 가져온 시드(seed)입니다. 그대로 베끼지 말고 작업·장비·환경에 맞게 재구성하세요.\n"
             "- RAG에 없는 위험요인이라도 해당 작업에서 실제 발생 가능하다면 일반 건설 안전 지식을 활용해 적극 포함하세요.\n"
-            "- 입력 항목 1개당 3행은 가능한 한 서로 다른 재해형태를 다루도록 다양화하세요 "
+            "- 입력 항목별 지정 행 수만큼 가능한 한 서로 다른 재해형태를 다루도록 다양화하세요 "
             "(예: 추락·감전·끼임·화재·맞음·깔림·붕괴·베임·근골격계·질병·유해물질 노출 등).\n"
             "- 표현·어조는 농어촌공사 위험성평가서 양식에 맞춰 간결한 한 문장으로 작성하세요.\n"
         )
@@ -250,7 +256,7 @@ def _build_krc_prompt(
             "## 도출 방침 (DB 중심)\n"
             "- RAG 참고에 제시된 농어촌공사 DB 위험요인을 그대로 활용하거나 가깝게 재서술하세요.\n"
             "- RAG에서 다루지 않은 주제는 가급적 추가하지 말고, DB 어휘와 표현 방식을 유지하세요.\n"
-            "- 입력 항목 1개당 3행은 서로 중복되지 않게 RAG 결과에서 골라 구성하세요.\n"
+            "- 입력 항목별 지정 행 수만큼 서로 중복되지 않게 RAG 결과에서 골라 구성하세요.\n"
         )
         hazard_field_desc = (
             "hazard (string): RAG에 등장한 농어촌공사 DB 위험요인을 기반으로 작성한 한 문장. "
@@ -258,14 +264,16 @@ def _build_krc_prompt(
         )
 
     return f"""당신은 농어촌공사 건설 현장 위험성평가서를 작성하는 전문가입니다.
-아래 입력 항목 {len(items)}개 각각에 대해, 해당 세부작업에서 발생할 수 있는 서로 다른 3가지 주요 위험 상황(위험요인)을 도출하여 총 {3 * len(items)}개의 위험성평가 행을 생성하세요. (입력 항목 1개당 반드시 3개의 독립적인 위험성평가 행이 생성되어야 합니다.)
+아래 입력 항목 {len(items)}개 각각에 대해, 해당 세부작업에서 발생할 수 있는 서로 다른 주요 위험 상황(위험요인)을 도출하여 총 {total_rows}개의 위험성평가 행을 생성하세요.
+항목별 생성해야 할 행 수는 다음과 같습니다: {counts_summary}.
+각 항목은 지정된 행 수만큼 서로 다른 독립적인 위험성평가 행을 반드시 생성해야 합니다.
 
 {body}
 
 {guidance}
 ## 출력 스펙
-- 입력 항목 수의 정확히 3배인 총 {3 * len(items)}개 객체로 구성된 JSON 배열을 반환
-- 배열의 순서는 입력 항목 1에 대한 3개 행, 이어서 입력 항목 2에 대한 3개 행 순이어야 합니다.
+- 총 {total_rows}개 객체로 구성된 JSON 배열을 반환
+- 배열의 순서는 입력 항목 1에 대한 {row_counts[0] if row_counts else 0}개 행, 이어서 입력 항목 2에 대한 행... 순서로 이어집니다 ({counts_summary}).
 - 각 객체 필드:
   - {hazard_field_desc}
   - accident_type (string): 재해형태 단답 (예: 떨어짐, 부딪힘, 끼임, 감전, 화재, 맞음, 깔림, 베임, 무리한동작 등)
@@ -318,18 +326,30 @@ def generate_krc(
     thinking_level: str = "balanced",
     model_override: Optional[str] = None,
     generation_mode: Literal["db", "hybrid"] = "hybrid",
+    row_counts: Optional[list[int]] = None,
 ) -> tuple[list[dict], bool]:
-    """LLM으로 KRC 행 데이터를 생성. fallback_used=True면 RAG top-3로 폴백.
+    """LLM으로 KRC 행 데이터를 생성. fallback_used=True면 RAG로 폴백.
+
+    row_counts: 항목별 생성 행 수 (None이면 모두 3행).
 
     generation_mode:
       - "db": RAG hits를 거의 그대로 재서술 (DB 어휘 유지)
       - "hybrid": RAG를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장
     """
+    if row_counts is None:
+        row_counts = [3] * len(items)
+    if len(row_counts) != len(items):
+        raise ValueError(
+            f"row_counts length {len(row_counts)} != items length {len(items)}"
+        )
+
+    total_rows = sum(row_counts)
+
     fallback = []
     generic_counter = 0
-    for item, hits in zip(items, rag_hits_per_item):
+    for item, hits, n_rows in zip(items, rag_hits_per_item, row_counts):
         # hazard 텍스트 기준으로 중복 제거 — ChromaDB가 거의 동일한 문서를 여러 번 돌려줘도
-        # 같은 항목에 동일 위험요인이 3개 들어가지 않게 한다.
+        # 같은 항목에 동일 위험요인이 들어가지 않게 한다.
         seen_hazards: set[str] = set()
         unique_hits: list[dict] = []
         for h in hits:
@@ -338,10 +358,10 @@ def generate_krc(
                 continue
             seen_hazards.add(hz)
             unique_hits.append(h)
-            if len(unique_hits) >= 3:
+            if len(unique_hits) >= n_rows:
                 break
 
-        for j in range(3):
+        for j in range(n_rows):
             if j < len(unique_hits):
                 h = unique_hits[j]
                 hazard = str(h.get("hazard", ""))
@@ -370,6 +390,7 @@ def generate_krc(
 
     prompt = _build_krc_prompt(
         items, rag_hits_per_item, default_executor, default_verifier,
+        row_counts=row_counts,
         generation_mode=generation_mode,
     )
     budget = get_thinking_budget(thinking_level)
@@ -387,19 +408,19 @@ def generate_krc(
     try:
         response = model.generate_content(prompt)
         parsed = _parse_krc_response(response.text)
-        if len(parsed) == 3 * len(items):
+        if len(parsed) == total_rows:
             return parsed, False
-        logger.warning("krc_llm_attempt1: parsed_len=%d expected=%d preview=%r", len(parsed), 3 * len(items), response.text[:200])
+        logger.warning("krc_llm_attempt1: parsed_len=%d expected=%d preview=%r", len(parsed), total_rows, response.text[:200])
     except Exception as e:
         logger.warning("krc_llm_attempt1_exc: %s: %s", type(e).__name__, e)
 
     try:
-        fix_prompt = prompt + "\n\n반드시 길이 " + str(3 * len(items)) + "인 유효한 JSON 배열만 반환하세요."
+        fix_prompt = prompt + "\n\n반드시 길이 " + str(total_rows) + "인 유효한 JSON 배열만 반환하세요."
         response = model.generate_content(fix_prompt)
         parsed = _parse_krc_response(response.text)
-        if len(parsed) == 3 * len(items):
+        if len(parsed) == total_rows:
             return parsed, False
-        logger.warning("krc_llm_attempt2: parsed_len=%d expected=%d preview=%r", len(parsed), 3 * len(items), response.text[:200])
+        logger.warning("krc_llm_attempt2: parsed_len=%d expected=%d preview=%r", len(parsed), total_rows, response.text[:200])
     except Exception as e:
         logger.warning("krc_llm_attempt2_exc: %s: %s", type(e).__name__, e)
 
@@ -576,6 +597,7 @@ def generate(
     timeout: int = 60,
     model_override: Optional[str] = None,
     generation_mode: Literal["db", "hybrid"] = "hybrid",
+    row_count: int = 3,
 ) -> tuple[list[AssessRow], bool]:
     """
     Returns (rows, fallback_used).
@@ -584,8 +606,14 @@ def generate(
     generation_mode:
       - "db": RAG hits를 거의 그대로 재서술 (DB 어휘 유지)
       - "hybrid": RAG를 시드로 LLM이 일반 건설지식을 결합해 폭넓게 확장
+
+    row_count: 생성할 행의 개수 (기본 3, 최대 12).
     """
-    prompt = build_prompt(work_description, equipment, locations, rag_results, generation_mode=generation_mode)
+    row_count = max(1, min(int(row_count), 12))
+    prompt = build_prompt(
+        work_description, equipment, locations, rag_results,
+        generation_mode=generation_mode, row_count=row_count,
+    )
     budget = get_thinking_budget(thinking_level)
     model_name = model_override or MODEL_MAP.get(thinking_level, "gemini-2.5-pro")
 
@@ -607,16 +635,16 @@ def generate(
         response = model.generate_content(prompt)
         rows = parse_llm_response(response.text)
         if rows:
-            return rows, False
+            return rows[:row_count], False
     except Exception:
         pass
 
     try:
-        fix_prompt = prompt + "\n\n반드시 유효한 JSON 배열만 반환하세요. 다른 텍스트 없이."
+        fix_prompt = prompt + f"\n\n반드시 정확히 {row_count}개 객체로 구성된 유효한 JSON 배열만 반환하세요. 다른 텍스트 없이."
         response = model.generate_content(fix_prompt)
         rows = parse_llm_response(response.text)
         if rows:
-            return rows, False
+            return rows[:row_count], False
     except Exception:
         pass
 
@@ -627,6 +655,6 @@ def generate(
             hazard=r.get("hazard", ""),
             control=r.get("control", ""),
         )
-        for r in rag_results[:12]
+        for r in rag_results[:row_count]
     ]
     return fallback_rows, True

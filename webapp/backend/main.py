@@ -103,6 +103,7 @@ def assess(req: AssessRequest):
         timeout=settings.llm_timeout_sec,
         model_override=req.model_override,
         generation_mode=req.generation_mode,
+        row_count=req.row_count,
     )
 
     # 행별 출처 부여: db 모드는 전 행 RAG, hybrid 모드는 앞 절반 RAG / 뒤 절반 AI 생성
@@ -213,6 +214,7 @@ def krc_assess(req: KrcAssessRequest):
         {"detail_work": it.detail_work, "work_location": it.work_location, "equipment": it.equipment}
         for it in req.items
     ]
+    row_counts = [max(1, min(int(it.row_count), 10)) for it in req.items]
     generated, _ = generate_krc(
         items=items_dicts,
         rag_hits_per_item=all_hits_per_item,
@@ -222,13 +224,21 @@ def krc_assess(req: KrcAssessRequest):
         thinking_level=req.thinking_level,
         model_override=req.model_override,
         generation_mode=req.generation_mode,
+        row_counts=row_counts,
     )
 
     rows: list[KrcRow] = []
-    # 항목별 3행 중 db_per_item개는 DB 출처, 나머지는 AI 생성
-    db_per_item = 3 if req.generation_mode == "db" else 2
+    # 항목별 n_rows 행 중 db_per_item개는 DB 출처, 나머지는 AI 생성
+    offset = 0
     for i, item in enumerate(req.items):
-        item_gen_list = generated[3 * i : 3 * i + 3]
+        n_rows = row_counts[i]
+        if req.generation_mode == "db":
+            db_per_item = n_rows
+        else:
+            # hybrid: 앞 ~2/3 정도는 RAG, 나머지는 AI 생성. 기존 3행 기준 2:1 유지.
+            db_per_item = max(1, (n_rows * 2 + 2) // 3)
+        item_gen_list = generated[offset : offset + n_rows]
+        offset += n_rows
         item_hits = all_hits_per_item[i] if i < len(all_hits_per_item) else []
         for j, gen in enumerate(item_gen_list):
             freq = gen.get("frequency")

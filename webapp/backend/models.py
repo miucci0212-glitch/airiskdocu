@@ -20,6 +20,7 @@ class AssessRequest(BaseModel):
     machinery: str = Field(default="해당없음", description="건설기계 종류 및 댓 수")
     locations: list[str] = Field(..., description="작업장소 목록")
     work_description: str = Field(..., description="작업내용 자연어 기술")
+    row_count: int = Field(3, ge=1, le=12, description="생성할 위험성평가 행 개수")
     thinking_level: Literal["fast", "balanced", "thorough", "max"] = "balanced"
     model_override: Optional[str] = None
     generation_mode: Literal["db", "hybrid"] = Field(
@@ -74,6 +75,7 @@ class KrcSearchItem(BaseModel):
     detail_work: str = Field("", description="세부작업(단위작업)")
     work_location: str = Field("", description="작업위치")
     equipment: str = Field("", description="사용장비/설비/인원")
+    row_count: int = Field(3, ge=1, le=10, description="이 항목에 대해 생성할 위험요인 행 개수")
 
 
 class KrcSearchRequest(BaseModel):
