@@ -468,7 +468,7 @@ export default function Home() {
               variant="primary"
               onClick={runAssess}
               loading={loading}
-              disabled={loading}
+              disabled={loading || !form.site_name.trim()}
             >
               위험성평가 생성
             </PillButton>
@@ -480,6 +480,9 @@ export default function Home() {
             >
               엑셀 다운로드
             </PillButton>
+            {!form.site_name.trim() && !loading && (
+              <span className="text-[12px] text-amber-600">현장명을 먼저 입력하세요</span>
+            )}
           </div>
         </div>
       )}

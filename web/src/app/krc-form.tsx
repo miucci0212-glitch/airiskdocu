@@ -214,7 +214,7 @@ export function KrcForm() {
   const filledItems = items.filter(
     (it) => it.detail_work.trim() || it.work_location.trim() || it.equipment.trim(),
   );
-  const canSubmit = filledItems.length > 0 && !loading;
+  const canSubmit = filledItems.length > 0 && siteName.trim() !== "" && !loading;
   const overCap = filledItems.length > MAX_ENTRIES;
 
   function metadataPayload() {
@@ -676,6 +676,9 @@ export function KrcForm() {
             >
               엑셀 다운로드
             </PillButton>
+            {!siteName.trim() && !loading && (
+              <span className="text-[12px] text-amber-600">현장명을 먼저 입력하세요</span>
+            )}
           </div>
 
           {rows && (
