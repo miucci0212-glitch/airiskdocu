@@ -14,6 +14,8 @@ from models import KrcMetadata, KrcRow
 BODY_START_ROW = 10
 ROWS_PER_ENTRY = 2
 MAX_ENTRIES = 3
+# 페이지 2+에서 삭제할 상단 행 수 (현장명/작성일/결재/작성자/관리기간/빈줄)
+HEADER_ROWS_TO_STRIP = 7
 
 
 def _format_date(d: Optional[date]) -> str:
@@ -26,21 +28,32 @@ def _template_for(krc_type: str) -> str:
     return "krc_수시_template.xlsx" if krc_type == "수시" else "krc_초기정기_template.xlsx"
 
 
-def _fill_sheet(ws: Worksheet, metadata: KrcMetadata, rows: list[KrcRow]) -> None:
-    """단일 시트에 메타데이터 + 최대 MAX_ENTRIES개 행을 기록한다."""
-    ws["B1"] = metadata.site_name
-    ws["B2"] = _format_date(metadata.write_date)
-    ws["B4"] = metadata.approver_construction
-    ws["B5"] = f"{_format_date(metadata.period_start)} ~ {_format_date(metadata.period_end)}"
-    # B3, B6 are placeholder labels in the template ("(위험성평가 회의일 또는 이전)",
-    # "(위험성평가 실시규정에 정해진 주기)") — leave them as-is.
-    ws["M2"] = metadata.approver_construction
-    ws["N2"] = metadata.approver_safety
-    ws["O2"] = metadata.approver_site_manager
-    ws["R2"] = metadata.inspector_supervisor
+def _fill_sheet(
+    ws: Worksheet,
+    metadata: KrcMetadata,
+    rows: list[KrcRow],
+    body_start_row: int = BODY_START_ROW,
+    include_metadata: bool = True,
+) -> None:
+    """단일 시트에 메타데이터 + 최대 MAX_ENTRIES개 행을 기록한다.
+
+    페이지 2+에서는 상단 메타데이터 영역이 잘려나가므로 include_metadata=False로
+    호출하고 body_start_row를 보정해서 컬럼 헤더 직후부터 데이터를 채운다.
+    """
+    if include_metadata:
+        ws["B1"] = metadata.site_name
+        ws["B2"] = _format_date(metadata.write_date)
+        ws["B4"] = metadata.approver_construction
+        ws["B5"] = f"{_format_date(metadata.period_start)} ~ {_format_date(metadata.period_end)}"
+        # B3, B6 are placeholder labels in the template ("(위험성평가 회의일 또는 이전)",
+        # "(위험성평가 실시규정에 정해진 주기)") — leave them as-is.
+        ws["M2"] = metadata.approver_construction
+        ws["N2"] = metadata.approver_safety
+        ws["O2"] = metadata.approver_site_manager
+        ws["R2"] = metadata.inspector_supervisor
 
     for i, row in enumerate(rows[:MAX_ENTRIES]):
-        top = BODY_START_ROW + i * ROWS_PER_ENTRY
+        top = body_start_row + i * ROWS_PER_ENTRY
         bot = top + 1
         ws[f"A{top}"] = row.detail_work or ""
         ws[f"A{bot}"] = row.work_location or ""
@@ -91,7 +104,17 @@ def fill_krc_template(
 
     for page_idx, ws in enumerate(sheets):
         chunk = rows[page_idx * MAX_ENTRIES : (page_idx + 1) * MAX_ENTRIES]
-        _fill_sheet(ws, metadata, chunk)
+        if page_idx == 0:
+            _fill_sheet(ws, metadata, chunk)
+        else:
+            # 페이지 2부터는 상단 메타 영역을 시각적으로 제거한다.
+            # openpyxl의 delete_rows는 병합 셀을 제대로 정리하지 못해 데이터가
+            # 어긋나므로, 대신 1~HEADER_ROWS_TO_STRIP행의 높이를 0으로 만들어
+            # 행을 접고 인쇄/표시상 보이지 않게 한다.
+            for r in range(1, HEADER_ROWS_TO_STRIP + 1):
+                ws.row_dimensions[r].height = 0
+                ws.row_dimensions[r].hidden = True
+            _fill_sheet(ws, metadata, chunk, include_metadata=False)
 
     wb.save(output_path)
     return output_path
