@@ -557,7 +557,7 @@ export default function Home() {
             <div className="grid grid-cols-5 gap-1.5 sm:gap-2.5 my-1">
               {[
                 { val: 1, label: "아쉬움", emoji: "😡" },
-                { val: 2, label: "그저끎", emoji: "😟" },
+                { val: 2, label: "그저그럼", emoji: "😟" },
                 { val: 3, label: "보통", emoji: "😐" },
                 { val: 4, label: "만족", emoji: "🙂" },
                 { val: 5, label: "매우만족", emoji: "😍" },
