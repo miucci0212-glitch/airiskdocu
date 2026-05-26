@@ -24,9 +24,7 @@ type AssessResponse = {
 const MODELS = [
   { value: "", label: "자동 (균형 모드)" },
   { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (최신·빠름)" },
-  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview (고성능)" },
   { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash-Lite Preview (경량)" },
-  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (고성능)" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (빠름)" },
   { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
 ];
@@ -40,20 +38,20 @@ type Company = (typeof COMPANIES)[number];
 type GenerationMode = "db" | "hybrid";
 
 const DEFAULT_REQUEST = {
-  site_name: "서면 어반센트 데시앙 신축공사",
-  vendor: "㈜한창테크",
-  trade: "금속",
-  period: { start: "2026-04-28", end: "2026-04-28" },
-  headcount: 2,
-  leader: "김재한",
-  workers_csv: "김영열",
-  equipment_csv: "핸드그라인더, 용접기",
-  machinery: "해당없음",
-  safety_manager: "홍길동",
-  supervisor: "홍길동",
-  site_manager: "홍길동",
-  locations_csv: "현장출입구, 감리실 외부 출입구",
-  work_description: "출입구 도어 시공, 몰딩 시공",
+  site_name: "",
+  vendor: "",
+  trade: "",
+  period: { start: "", end: "" },
+  headcount: 1,
+  leader: "",
+  workers_csv: "",
+  equipment_csv: "",
+  machinery: "",
+  safety_manager: "",
+  supervisor: "",
+  site_manager: "",
+  locations_csv: "",
+  work_description: "",
   thinking_level: "balanced" as ThinkingLevel,
   model_override: "",
   generation_mode: "hybrid" as GenerationMode,
@@ -240,13 +238,13 @@ export default function Home() {
         <div className="space-y-6">
           <Card title="현장 정보">
             <Row label="현장명">
-              <TextField value={form.site_name} onChange={(v) => update("site_name", v)} muted={isDefaultText("site_name")} />
+              <TextField value={form.site_name} onChange={(v) => update("site_name", v)} placeholder="예: 서면 어반센트 데시앙 신축공사" muted={isDefaultText("site_name")} />
             </Row>
             <Row label="업체명">
-              <TextField value={form.vendor} onChange={(v) => update("vendor", v)} muted={isDefaultText("vendor")} />
+              <TextField value={form.vendor} onChange={(v) => update("vendor", v)} placeholder="예: ㈜한창테크" muted={isDefaultText("vendor")} />
             </Row>
             <Row label="작업 책임자">
-              <TextField value={form.leader} onChange={(v) => update("leader", v)} muted={isDefaultText("leader")} />
+              <TextField value={form.leader} onChange={(v) => update("leader", v)} placeholder="예: 김재한" muted={isDefaultText("leader")} />
             </Row>
           </Card>
 
@@ -280,7 +278,7 @@ export default function Home() {
               <TextField
                 value={form.machinery}
                 onChange={(v) => update("machinery", v)}
-                placeholder="종류 및 댓 수"
+                placeholder="예: 해당없음"
                 muted={isDefaultText("machinery")}
               />
             </Row>
@@ -288,7 +286,7 @@ export default function Home() {
               <TextField
                 value={form.workers_csv}
                 onChange={(v) => update("workers_csv", v)}
-                placeholder="쉼표로 구분"
+                placeholder="예: 김영열 (쉼표로 구분)"
                 muted={isDefaultText("workers_csv")}
               />
             </Row>
@@ -296,7 +294,7 @@ export default function Home() {
               <TextField
                 value={form.equipment_csv}
                 onChange={(v) => update("equipment_csv", v)}
-                placeholder="쉼표로 구분"
+                placeholder="예: 핸드그라인더, 용접기"
                 muted={isDefaultText("equipment_csv")}
               />
             </Row>
@@ -304,17 +302,18 @@ export default function Home() {
               <TextField
                 value={form.locations_csv}
                 onChange={(v) => update("locations_csv", v)}
-                placeholder="쉼표로 구분"
+                placeholder="예: 현장출입구, 감리실 외부 출입구"
                 muted={isDefaultText("locations_csv")}
               />
             </Row>
             <Row label="공종">
-              <TextField value={form.trade} onChange={(v) => update("trade", v)} muted={isDefaultText("trade")} />
+              <TextField value={form.trade} onChange={(v) => update("trade", v)} placeholder="예: 금속" muted={isDefaultText("trade")} />
             </Row>
             <Row block label="작업내용">
               <textarea
                 rows={3}
-                className={`w-full resize-none rounded-[11px] border border-hairline bg-canvas px-3 py-2 text-[15px] outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25 ${
+                placeholder="예: 출입구 도어 시공, 몰딩 시공"
+                className={`w-full resize-none rounded-[11px] border border-hairline bg-canvas px-3 py-2 text-[15px] outline-none placeholder:text-ink-muted-48 focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25 ${
                   isDefaultText("work_description") ? "text-ink-muted-48" : "text-ink"
                 }`}
                 value={form.work_description}
@@ -331,6 +330,7 @@ export default function Home() {
               <TextField
                 value={form.safety_manager}
                 onChange={(v) => update("safety_manager", v)}
+                placeholder="예: 홍길동"
                 muted={isDefaultText("safety_manager")}
               />
             </Row>
@@ -338,6 +338,7 @@ export default function Home() {
               <TextField
                 value={form.supervisor}
                 onChange={(v) => update("supervisor", v)}
+                placeholder="예: 홍길동"
                 muted={isDefaultText("supervisor")}
               />
             </Row>
@@ -345,6 +346,7 @@ export default function Home() {
               <TextField
                 value={form.site_manager}
                 onChange={(v) => update("site_manager", v)}
+                placeholder="예: 홍길동"
                 muted={isDefaultText("site_manager")}
               />
             </Row>
@@ -644,7 +646,7 @@ function TextField({
       onFocus={() => {
         if (muted && type !== "number") onChange("");
       }}
-      className={`w-full rounded-[11px] border border-hairline bg-canvas px-3 py-2 text-[15px] outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25 ${
+      className={`w-full rounded-[11px] border border-hairline bg-canvas px-3 py-2 text-[15px] outline-none placeholder:text-ink-muted-48 focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25 ${
         muted ? "text-ink-muted-48" : "text-ink"
       }`}
     />

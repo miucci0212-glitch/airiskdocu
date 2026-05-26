@@ -54,9 +54,7 @@ type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 const MODELS = [
   { value: "", label: "자동 (균형 모드)" },
   { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash (최신·빠름)" },
-  { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview (고성능)" },
   { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash-Lite Preview (경량)" },
-  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (고성능)" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (빠름)" },
   { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
 ];
@@ -64,12 +62,12 @@ const MODELS = [
 const MAX_ENTRIES = 3;
 
 const DEFAULTS = {
-  siteName: "00지구 수리시설개보수사업 토목공사",
-  writer: "김재한",
-  approverConstruction: "김재한",
-  approverSafety: "홍길동",
-  approverSiteManager: "홍길동",
-  inspectorSupervisor: "홍길동",
+  siteName: "",
+  writer: "",
+  approverConstruction: "",
+  approverSafety: "",
+  approverSiteManager: "",
+  inspectorSupervisor: "",
 } as const;
 
 function todayISO(): string {
@@ -177,7 +175,7 @@ export function KrcForm() {
   const [approverSiteManager, setApproverSiteManager] = useState<string>(DEFAULTS.approverSiteManager);
   const [inspectorSupervisor, setInspectorSupervisor] = useState<string>(DEFAULTS.inspectorSupervisor);
 
-  const [items, setItems] = useState<KrcItem[]>(defaultItems);
+  const [items, setItems] = useState<KrcItem[]>(() => [emptyItem()]);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("hybrid");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("balanced");
   const [modelOverride, setModelOverride] = useState<string>("");
@@ -432,7 +430,7 @@ export function KrcForm() {
           <Text
             value={siteName}
             onChange={setSiteName}
-            placeholder="예: 서면 어반센트 데시앙 신축공사"
+            placeholder="예: 00지구 수리시설개보수사업 토목공사"
             muted={siteName === DEFAULTS.siteName}
           />
         </Row>
@@ -474,6 +472,7 @@ export function KrcForm() {
           <Text
             value={approverConstruction}
             onChange={setApproverConstruction}
+            placeholder="예: 김재한"
             muted={approverConstruction === DEFAULTS.approverConstruction}
           />
         </Row>
@@ -481,6 +480,7 @@ export function KrcForm() {
           <Text
             value={approverSafety}
             onChange={setApproverSafety}
+            placeholder="예: 홍길동"
             muted={approverSafety === DEFAULTS.approverSafety}
           />
         </Row>
@@ -488,6 +488,7 @@ export function KrcForm() {
           <Text
             value={approverSiteManager}
             onChange={setApproverSiteManager}
+            placeholder="예: 홍길동"
             muted={approverSiteManager === DEFAULTS.approverSiteManager}
           />
         </Row>
@@ -495,6 +496,7 @@ export function KrcForm() {
           <Text
             value={inspectorSupervisor}
             onChange={setInspectorSupervisor}
+            placeholder="예: 홍길동"
             muted={inspectorSupervisor === DEFAULTS.inspectorSupervisor}
           />
         </Row>
@@ -1233,7 +1235,7 @@ function Text({
       onFocus={() => {
         if (muted && type !== "date") onChange("");
       }}
-      className={`w-full rounded-[11px] border border-hairline bg-canvas px-3 py-2 text-[15px] outline-none focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25 ${
+      className={`w-full rounded-[11px] border border-hairline bg-canvas px-3 py-2 text-[15px] outline-none placeholder:text-ink-muted-48 focus:border-primary-focus focus:ring-2 focus:ring-primary-focus/25 ${
         muted ? "text-ink-muted-48" : "text-ink"
       }`}
     />
