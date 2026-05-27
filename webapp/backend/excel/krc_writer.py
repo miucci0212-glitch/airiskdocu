@@ -28,6 +28,16 @@ def _template_for(krc_type: str) -> str:
     return "krc_수시_template.xlsx" if krc_type == "수시" else "krc_초기정기_template.xlsx"
 
 
+def _apply_print_settings(ws: Worksheet) -> None:
+    """인쇄 시 시트 하나가 A4 한 페이지에 들어가도록 fit-to-page 설정."""
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4  # 9
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_options.horizontalCentered = True
+
+
 def _fill_sheet(
     ws: Worksheet,
     metadata: KrcMetadata,
@@ -115,6 +125,7 @@ def fill_krc_template(
                 ws.row_dimensions[r].height = 0
                 ws.row_dimensions[r].hidden = True
             _fill_sheet(ws, metadata, chunk, include_metadata=False)
+        _apply_print_settings(ws)
 
     wb.save(output_path)
     return output_path

@@ -66,6 +66,14 @@ def fill_template(
         note_col = column_index_from_string(cm["note_col"])
         ws.cell(row=excel_row, column=note_col, value=row_data.note)
 
+    # 인쇄 시 시트 하나가 A4 한 페이지에 들어가도록 fit-to-page 강제
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4  # 9
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_options.horizontalCentered = True
+
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
     return output_path
