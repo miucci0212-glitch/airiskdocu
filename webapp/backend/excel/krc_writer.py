@@ -1,6 +1,7 @@
 """농어촌공사 위험성평가 양식 채우기."""
 import math
 import os
+import re
 import shutil
 from datetime import date
 from typing import Optional
@@ -16,6 +17,14 @@ ROWS_PER_ENTRY = 2
 MAX_ENTRIES = 5
 # 페이지 2+에서 삭제할 상단 행 수 (현장명/작성일/결재/작성자/관리기간/빈줄)
 HEADER_ROWS_TO_STRIP = 7
+
+
+def _normalize_controls(text: str) -> str:
+    """DB 인제스트에서 ' | '로 조인된 대책 문자열을 셀 내 줄바꿈으로 변환한다."""
+    if not text:
+        return ""
+    parts = [p.strip() for p in re.split(r"\s*\|\s*", text) if p.strip()]
+    return "\n".join(parts)
 
 
 def _format_date(d: Optional[date]) -> str:
@@ -75,7 +84,7 @@ def _fill_sheet(
         if row.severity is not None:
             ws[f"H{top}"] = row.severity
         ws[f"I{top}"] = row.risk_grade or ""
-        ws[f"J{top}"] = row.controls or ""
+        ws[f"J{top}"] = _normalize_controls(row.controls or "")
         ws[f"P{top}"] = row.improved_risk or ""
         ws[f"P{bot}"] = row.improvement_due or ""
         ws[f"R{top}"] = row.executor or ""
